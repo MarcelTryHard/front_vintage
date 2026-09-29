@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniStore - Gestão Comercial</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-icon">O</div>
+            <div>
+                <strong>OmniStore</strong>
+                <small>Gestão Comercial</small>
+            </div>
+        </div>
+
+        <nav>
+            <button class="nav-item active" data-section="dashboard">🏠 Dashboard</button>
+            <button class="nav-item" data-section="vendas">🛒 Vendas</button>
+            <button class="nav-item" data-section="produtos">📦 Produtos</button>
+            <button class="nav-item" data-section="estoque">📊 Estoque</button>
+            <button class="nav-item" data-section="clientes">👥 Clientes</button>
+            <button class="nav-item" data-section="fornecedores">🚚 Fornecedores</button>
+            <button class="nav-item" data-section="categorias">🏷️ Categorias</button>
+            <button class="nav-item" data-section="lojas">🏪 Lojas</button>
+            <button class="nav-item" data-section="pagamentos">💳 Pagamentos</button>
+            <button class="nav-item" data-section="pendencias">⏳ Pendências</button>
+            <button class="nav-item" data-section="contas">🏦 Contas</button>
+            <button class="nav-item" data-section="extrato">🧾 Extrato</button>
+            <button class="nav-item" data-section="relatorios">📈 Relatórios</button>
+        </nav>
+
+        <div class="sidebar-footer">
+            <span>OmniStore v2.0</span>
+        </div>
+    </aside>
+
+    <main class="main">
+        <header class="topbar">
+            <div>
+                <h1 id="page-title">Dashboard</h1>
+                <p id="page-subtitle">Visão geral da operação comercial</p>
+            </div>
+            <div class="user">
+                <div class="avatar">A</div>
+                <div>
+                    <strong>Administrador</strong>
+                    <small>Acesso total</small>
+                </div>
+            </div>
+        </header>
+
+        <section id="dashboard" class="section active">
+            <div class="cards">
+                <div class="card">
+                    <span>Vendas hoje</span>
+                    <strong id="dash-sales">R$ 0,00</strong>
+                    <small>Faturamento registrado</small>
+                </div>
+                <div class="card">
+                    <span>Produtos</span>
+                    <strong id="dash-products">0</strong>
+                    <small>Produtos cadastrados</small>
+                </div>
+                <div class="card">
+                    <span>Clientes</span>
+                    <strong id="dash-clients">0</strong>
+                    <small>Clientes cadastrados</small>
+                </div>
+                <div class="card warning">
+                    <span>Estoque baixo</span>
+                    <strong id="dash-low-stock">0</strong>
+                    <small>Produtos com 5 ou menos unidades</small>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <h2>Vendas recentes</h2>
+                            <p>Últimas vendas registradas</p>
+                        </div>
+                        <button class="btn secondary" onclick="showSection('vendas')">Ver vendas</button>
+                    </div>
+                    <div id="recent-sales" class="empty">Nenhuma venda registrada.</div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <div>
+                            <h2>Ações rápidas</h2>
+                            <p>Acesse as principais funções</p>
+                        </div>
+                    </div>
+                    <div class="quick-actions">
+                        <button onclick="showSection('vendas')">➕ Nova venda</button>
+                        <button onclick="showSection('produtos')">📦 Novo produto</button>
+                        <button onclick="showSection('clientes')">👤 Novo cliente</button>
+                        <button onclick="showSection('estoque')">📊 Ver estoque</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="vendas" class="section">
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h2>Realizar venda no PDV</h2>
+                        <p>Selecione cliente, produtos e forma de pagamento</p>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <label>Cliente
+                        <select id="sale-client"></select>
+                    </label>
+                    <label>Loja
+                        <select id="sale-store"></select>
+                    </label>
+                    <label>Canal
+                        <select id="sale-channel">
+                            <option>Loja física</option>
+                            <option>Online</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="sale-builder">
+                    <div class="form-grid">
+                        <label>Produto
+                            <select id="sale-product"></select>
+                        </label>
+                        <label>Quantidade
+                            <input id="sale-qty" type="number" min="1" value="1">
+                        </label>
+                        <button class="btn primary align-end" onclick="addSaleItem()">Adicionar item</button>
+                    </div>
+
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Produto</th>
+                                    <th>Qtd.</th>
+                                    <th>Preço unit.</th>
+                                    <th>Total</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="sale-items"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="sale-footer">
+                        <div>
+                            <span>Total da venda</span>
+                            <strong id="sale-total">R$ 0,00</strong>
+                        </div>
+                        <div class="payment-box">
+                            <input id="sale-paid" type="number" step="0.01" min="0.01" placeholder="Valor pago (vazio = total)">
+                            <select id="sale-payment">
+                                <option>PIX</option>
+                                <option>Cartão</option>
+                                <option>Boleto</option>
+                            </select>
+                            <button class="btn success" onclick="finishSale()">Finalizar venda</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <div>
+                        <h2>Histórico de vendas</h2>
+                    </div>
+                    <input class="search" id="sales-search" placeholder="Pesquisar venda..." oninput="renderSales()">
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th><th>Data</th><th>Cliente</th><th>Loja</th><th>Canal</th><th>Total</th><th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sales-table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="produtos" class="section">
+            <div class="panel">
+                <div class="panel-header">
+                    <div><h2>Produtos</h2><p>Catálogo de produtos por loja e categoria</p></div>
+                    <button class="btn primary" onclick="openModal('product-modal')">+ Novo produto</button>
+                </div>
+                <input class="search full" id="product-search" placeholder="Pesquisar produto..." oninput="renderProducts()">
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>ID</th><th>Nome</th><th>Categoria</th><th>Loja</th><th>Preço</th><th>Tendência</th><th>Novidade</th></tr></thead>
+                        <tbody id="products-table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="estoque" class="section">
+            <div class="panel">
+                <div class="panel-header">
+                    <div><h2>Estoque</h2><p>Controle de quantidade por produto e fornecedor</p></div>
+                    <button class="btn primary" onclick="openModal('stock-modal')">+ Entrada de estoque</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Produto</th><th>Fornecedor</th><th>Quantidade</th><th>Situação</th></tr></thead>
+                        <tbody id="stock-table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="clientes" class="section">
+            <div class="panel">
+                <div class="panel-header">
+                    <div><h2>Clientes</h2><p>Cadastro de clientes</p></div>
+                    <button class="btn primary" onclick="openModal('client-modal')">+ Novo cliente</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>ID</th><th>Nome</th><th>CPF</th><th>E-mail</th><th>Telefone</th></tr></thead>
+                        <tbody id="clients-table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="fornecedores" class="section">
+            <div class="panel">
+                <div class="panel-header">
+                    <div><h2>Fornecedores</h2><p>Cadastro de fornecedores</p></div>
+                    <button class="btn primary" onclick="openModal('supplier-modal')">+ Novo fornecedor</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>ID</th><th>Razão social</th><th>CNPJ</th><th>E-mail</th><th>Telefone</th></tr></thead>
+                        <tbody id="suppliers-table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="categorias" class="section">
+            <div class="panel">
+                <div class="panel-header">
+                    <div><h2>Categorias</h2><p>Classificação do catálogo</p></div>
+                    <button class="btn primary" onclick="openModal('category-modal')">+ Nova categoria</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>ID</th><th>Nome</th><th>Descrição</th></tr></thead>
+                        <tbody id="categories-table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="lojas" class="section">
+            <div class="panel">
+                <div class="panel-header">
+                    <div><h2>Lojas</h2><p>Gestão de lojas físicas e online</p></div>
+                    <button class="btn primary" onclick="openModal('store-modal')">+ Nova loja</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>ID</th><th>Nome</th><th>Tipo</th><th>Endereço</th></tr></thead>
+                        <tbody id="stores-table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="pagamentos" class="section">
+            <div class="panel">
+                <div class="panel-header">
+                    <div><h2>Pagamentos</h2><p>Controle e liquidação de pagamentos</p></div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>ID</th><th>Venda</th><th>Forma</th><th>Valor</th><th>Status</th><th>Data</th></tr></thead>
+                        <tbody id="payments-table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="pendencias" class="section">
+            <div class="panel">
+                <div class="panel-header"><div><h2>Pagamentos pendentes</h2><p>Vendas abertas aguardando quitação</p></div></div>
+                <div class="table-wrap"><table>
+                    <thead><tr><th>Venda</th><th>Cliente</th><th>Total</th><th>Pago</th><th>Restante</th><th></th></tr></thead>
+                    <tbody id="pending-table"></tbody>
+                </table></div>
+            </div>
+        </section>
+
+        <section id="contas" class="section">
+            <div class="panel">
+                <div class="panel-header"><div><h2>Contas financeiras</h2><p>Saldo consolidado de lojas e clientes</p></div></div>
+                <div class="table-wrap"><table>
+                    <thead><tr><th>Tipo</th><th>Titular</th><th>Nº da conta</th><th>Saldo</th></tr></thead>
+                    <tbody id="accounts-table"></tbody>
+                </table></div>
+            </div>
+        </section>
+
+        <section id="extrato" class="section">
+            <div class="panel">
+                <div class="panel-header"><div><h2>Extrato do cliente</h2><p id="extrato-conta">Selecione um cliente</p></div>
+                    <select id="extrato-client" class="search" onchange="loadExtrato()"></select></div>
+                <div class="table-wrap"><table>
+                    <thead><tr><th>Venda</th><th>Data</th><th>Loja</th><th>Total</th><th>Pago</th><th>Status</th></tr></thead>
+                    <tbody id="extrato-table"></tbody>
+                </table></div>
+            </div>
+        </section>
+
+        <section id="relatorios" class="section">
+            <div class="cards">
+                <div class="card"><span>Vendas</span><strong id="rep-count">0</strong><small>Total de vendas</small></div>
+                <div class="card"><span>Faturamento</span><strong id="rep-revenue">R$ 0,00</strong><small>Soma das vendas</small></div>
+                <div class="card"><span>Recebido</span><strong id="rep-received">R$ 0,00</strong><small>Pagamentos confirmados</small></div>
+                <div class="card"><span>Ticket médio</span><strong id="rep-ticket">R$ 0,00</strong><small>Por venda</small></div>
+            </div>
+            <div class="grid-2">
+                <div class="panel"><h2>Mais vendidos</h2>
+                    <table><thead><tr><th>Produto</th><th>Qtd.</th><th>Total</th></tr></thead><tbody id="rep-products"></tbody></table></div>
+                <div class="panel"><h2>Por loja</h2>
+                    <table><thead><tr><th>Loja</th><th>Vendas</th><th>Total</th></tr></thead><tbody id="rep-stores"></tbody></table>
+                    <h2 style="margin-top:20px">Por forma de pagamento</h2>
+                    <table><thead><tr><th>Forma</th><th>Total</th></tr></thead><tbody id="rep-methods"></tbody></table></div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal Cliente -->
+    <div class="modal" id="client-modal">
+        <div class="modal-box">
+            <button class="close" onclick="closeModal('client-modal')">×</button>
+            <h2>Novo cliente</h2>
+            <form onsubmit="saveClient(event)">
+                <label>Nome<input id="client-name" required></label>
+                <label>CPF<input id="client-cpf" required maxlength="14" placeholder="000.000.000-00"></label>
+                <label>E-mail<input id="client-email" type="email"></label>
+                <label>Telefone<input id="client-phone"></label>
+                <button class="btn primary" type="submit">Cadastrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Produto -->
+    <div class="modal" id="product-modal">
+        <div class="modal-box">
+            <button class="close" onclick="closeModal('product-modal')">×</button>
+            <h2>Novo produto</h2>
+            <form onsubmit="saveProduct(event)">
+                <label>Nome<input id="product-name" required></label>
+                <label>Categoria<select id="product-category"></select></label>
+                <label>Loja<select id="product-store"></select></label>
+                <label>Fornecedor<select id="product-supplier" required></select></label>
+                <label>Preço base<input id="product-price" type="number" step="0.01" min="0" required></label>
+                <label>Quantidade inicial<input id="product-stock" type="number" min="0" value="0"></label>
+                <label class="check"><input id="product-trend" type="checkbox"> Produto em tendência</label>
+                <label class="check"><input id="product-new" type="checkbox"> Produto novo</label>
+                <button class="btn primary" type="submit">Cadastrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Fornecedor -->
+    <div class="modal" id="supplier-modal">
+        <div class="modal-box">
+            <button class="close" onclick="closeModal('supplier-modal')">×</button>
+            <h2>Novo fornecedor</h2>
+            <form onsubmit="saveSupplier(event)">
+                <label>Razão social<input id="supplier-name" required></label>
+                <label>CNPJ<input id="supplier-cnpj" required maxlength="18" placeholder="00.000.000/0000-00"></label>
+                <label>E-mail<input id="supplier-email" type="email"></label>
+                <label>Telefone<input id="supplier-phone"></label>
+                <button class="btn primary" type="submit">Cadastrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Categoria -->
+    <div class="modal" id="category-modal">
+        <div class="modal-box">
+            <button class="close" onclick="closeModal('category-modal')">×</button>
+            <h2>Nova categoria</h2>
+            <form onsubmit="saveCategory(event)">
+                <label>Nome<input id="category-name" required></label>
+                <label>Descrição<textarea id="category-description"></textarea></label>
+                <button class="btn primary" type="submit">Cadastrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Loja -->
+    <div class="modal" id="store-modal">
+        <div class="modal-box">
+            <button class="close" onclick="closeModal('store-modal')">×</button>
+            <h2>Nova loja</h2>
+            <form onsubmit="saveStore(event)">
+                <label>Nome<input id="store-name" required></label>
+                <label>Tipo<select id="store-type"><option>Física</option><option>Online</option></select></label>
+                <label>Endereço<input id="store-address"></label>
+                <button class="btn primary" type="submit">Cadastrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Entrada de Estoque -->
+    <div class="modal" id="stock-modal"><div class="modal-box">
+        <button class="close" onclick="closeModal('stock-modal')">×</button>
+        <h2>Entrada de estoque</h2>
+        <form onsubmit="saveStock(event)">
+            <label>Produto<select id="stock-product" required></select></label>
+            <label>Fornecedor<select id="stock-supplier" required></select></label>
+            <label>Quantidade recebida<input id="stock-qty" type="number" min="1" required></label>
+            <button class="btn primary" type="submit">Registrar entrada</button>
+        </form>
+    </div></div>
+
+    <!-- Modal Receber Pagamento -->
+    <div class="modal" id="pay-modal"><div class="modal-box">
+        <button class="close" onclick="closeModal('pay-modal')">×</button>
+        <h2 id="pay-title">Receber pagamento</h2>
+        <form onsubmit="savePay(event)">
+            <input id="pay-sale" type="hidden">
+            <label>Forma<select id="pay-method"><option>PIX</option><option>Cartão</option><option>Boleto</option></select></label>
+            <label>Valor<input id="pay-value" type="number" step="0.01" min="0.01" required></label>
+            <button class="btn success" type="submit">Confirmar pagamento</button>
+        </form>
+    </div></div>
+
+    <script src="js/script.js"></script>
+    <script src="js/extras.js"></script>
+</body>
+</html>
