@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - OmniStore</title>
+    <link rel="stylesheet" href="css/style.css">
+
+    <style>
+        .tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 18px;
+            background: #eef2ff;
+            padding: 4px;
+            border-radius: 9px;
+        }
+
+        .tabs button {
+            flex: 1;
+            border: 0;
+            padding: 9px;
+            border-radius: 7px;
+            background: transparent;
+            cursor: pointer;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .tabs button.on {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .login-card {
+            max-height: 94vh;
+            overflow-y: auto;
+        }
+
+        .login-card::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .login-card::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 10px;
+        }
+
+        .ok {
+            color: var(--success);
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body class="login-page">
+
+    <div class="login-card">
+
+        <div class="brand">
+            <div class="brand-icon">O</div>
+
+            <div>
+                <strong>OmniStore</strong>
+                <small>Gestão de Vendas e Estoque</small>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button type="button" id="tab-in" class="on">
+                Entrar
+            </button>
+
+            <button type="button" id="tab-up">
+                Criar conta
+            </button>
+        </div>
+
+        <form id="login-form">
+
+            <label>
+                Usuário
+                <input
+                    id="login"
+                    type="text"
+                    autocomplete="username"
+                    required
+                    autofocus
+                >
+            </label>
+
+            <label>
+                Senha
+                <input
+                    id="senha"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                >
+            </label>
+
+            <label class="check">
+                <input type="checkbox" id="show">
+                Mostrar senha
+            </label>
+
+            <div class="login-error" id="erro"></div>
+
+            <button class="btn primary" id="btn" type="submit">
+                Entrar
+            </button>
+
+        </form>
+
+        <form id="reg-form" style="display:none">
+
+            <label>
+                Nome completo
+                <input
+                    id="r-nome"
+                    type="text"
+                    required
+                >
+            </label>
+
+            <label>
+                CPF
+                <input
+                    id="r-cpf"
+                    type="text"
+                    required
+                    maxlength="14"
+                    placeholder="000.000.000-00"
+                    inputmode="numeric"
+                >
+            </label>
+
+            <label>
+                E-mail
+                <input
+                    id="r-email"
+                    type="email"
+                >
+            </label>
+
+            <label>
+                Telefone
+                <input
+                    id="r-tel"
+                    type="text"
+                    placeholder="(00) 00000-0000"
+                >
+            </label>
+
+            <label>
+                Usuário (para entrar)
+                <input
+                    id="r-login"
+                    type="text"
+                    required
+                    minlength="3"
+                    autocomplete="username"
+                >
+            </label>
+
+            <label>
+                Senha (mín. 6)
+                <input
+                    id="r-senha"
+                    type="password"
+                    required
+                    minlength="6"
+                    autocomplete="new-password"
+                >
+            </label>
+
+            <label>
+                Confirmar senha
+                <input
+                    id="r-senha2"
+                    type="password"
+                    required
+                    minlength="6"
+                    autocomplete="new-password"
+                >
+            </label>
+
+            <div class="login-error" id="r-erro"></div>
+
+            <button
+                class="btn success"
+                id="r-btn"
+                type="submit"
+            >
+                Cadastrar e entrar
+            </button>
+
+        </form>
+
+    </div>
+
+    <script>
+        const API_BASE = location.port === "3000"
+            ? ""
+            : "http://localhost:3000";
+
+        const $ = id => document.getElementById(id);
+
+        try {
+            const auth = JSON.parse(
+                localStorage.getItem("omni_auth")
+            );
+
+            if (auth && auth.token && auth.user) {
+                location.replace("index.html");
+            }
+        } catch (e) {
+            localStorage.removeItem("omni_auth");
+        }
+
+        function tab(reg) {
+            $("login-form").style.display = reg ? "none" : "flex";
+            $("reg-form").style.display = reg ? "flex" : "none";
+
+            $("tab-in").classList.toggle("on", !reg);
+            $("tab-up").classList.toggle("on", reg);
+        }
+
+        $("tab-in").onclick = () => tab(false);
+        $("tab-up").onclick = () => tab(true);
+
+        $("show").onchange = e => {
+            $("senha").type = e.target.checked
+                ? "text"
+                : "password";
+        };
+
+        $("r-cpf").oninput = e => {
+            const d = e.target.value
+                .replace(/\D/g, "")
+                .slice(0, 11);
+
+            e.target.value = d
+                .replace(/(\d{3})(\d)/, "$1.$2")
+                .replace(/(\d{3})(\d)/, "$1.$2")
+                .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+        };
+
+        $("r-tel").oninput = e => {
+            const d = e.target.value
+                .replace(/\D/g, "")
+                .slice(0, 11);
+
+            if (d.length <= 10) {
+                e.target.value = d
+                    .replace(/(\d{2})(\d)/, "($1) $2")
+                    .replace(/(\d{4})(\d)/, "$1-$2");
+            } else {
+                e.target.value = d
+                    .replace(/(\d{2})(\d)/, "($1) $2")
+                    .replace(/(\d{5})(\d)/, "$1-$2");
+            }
+        };
+
+        async function post(path, body) {
+            const res = await fetch(API_BASE + path, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok) {
+                throw new Error(
+                    data.erro ||
+                    "Falha na requisição (" + res.status + ")"
+                );
+            }
+
+            return data;
+        }
+
+        function enter(data) {
+            if (
+                !data ||
+                !data.token ||
+                !data.user
+            ) {
+                throw new Error(
+                    "Resposta de login inválida."
+                );
+            }
+
+            localStorage.setItem(
+                "omni_auth",
+                JSON.stringify(data)
+            );
+
+            location.replace("index.html");
+        }
+
+        const failMsg = err => {
+            if (err instanceof TypeError) {
+                return "Servidor offline. Inicie o Node com: npm start";
+            }
+
+            return err.message ||
+                "Ocorreu um erro.";
+        };
+
+        $("login-form").onsubmit = async e => {
+            e.preventDefault();
+
+            $("erro").textContent = "";
+            $("btn").disabled = true;
+            $("btn").textContent = "Entrando...";
+
+            try {
+                const data = await post("/api/login", {
+                    login: $("login").value.trim(),
+                    senha: $("senha").value
+                });
+
+                enter(data);
+
+            } catch (err) {
+                $("erro").textContent = failMsg(err);
+                $("btn").disabled = false;
+                $("btn").textContent = "Entrar";
+            }
+        };
+
+        $("reg-form").onsubmit = async e => {
+            e.preventDefault();
+
+            const erro = $("r-erro");
+            const btn = $("r-btn");
+
+            erro.className = "login-error";
+            erro.textContent = "";
+
+            if (
+                $("r-senha").value !==
+                $("r-senha2").value
+            ) {
+                erro.textContent =
+                    "As senhas não conferem.";
+                return;
+            }
+
+            if ($("r-senha").value.length < 6) {
+                erro.textContent =
+                    "A senha deve ter pelo menos 6 caracteres.";
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = "Cadastrando...";
+
+            try {
+                const data = await post("/api/cadastro", {
+                    nome: $("r-nome").value.trim(),
+                    cpf: $("r-cpf").value.trim(),
+                    email: $("r-email").value.trim(),
+                    telefone: $("r-tel").value.trim(),
+                    login: $("r-login").value.trim(),
+                    senha: $("r-senha").value
+                });
+
+                erro.className = "ok";
+                erro.textContent =
+                    "Cadastro realizado! Entrando...";
+
+                setTimeout(() => {
+                    enter(data);
+                }, 600);
+
+            } catch (err) {
+                erro.textContent = failMsg(err);
+                btn.disabled = false;
+                btn.textContent = "Cadastrar e entrar";
+            }
+        };
+    </script>
+
+</body>
+</html>
