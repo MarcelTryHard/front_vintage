@@ -1,40 +1,38 @@
-// ============================================================
-// OMNISTORE - AUTENTICAÇÃO
-// ============================================================
-
 const AUTH = (() => {
-    let d = null;
+    let dados = null;
 
     try {
-        d = JSON.parse(localStorage.getItem("omni_auth"));
+        dados = JSON.parse(localStorage.getItem("omni_auth"));
     } catch (e) {
-        d = null;
+        dados = null;
     }
 
     return {
-        token: d?.token || null,
-        user: d?.user || null,
+        token: dados?.token || null,
+        user: dados?.user || null,
 
         logout() {
             localStorage.removeItem("omni_auth");
-            location.replace("login.html");
+            window.location.replace("login.html");
         }
     };
 })();
 
 if (!AUTH.token || !AUTH.user) {
-    location.replace("login.html");
-    throw new Error("Não autenticado");
+    window.location.replace("login.html");
+    throw new Error("Usuário não autenticado.");
 }
 
-const API_BASE = location.port === "3000"
-    ? ""
-    : "http://localhost:3000";
+const API_BASE =
+    location.port === "3000"
+        ? ""
+        : "http://localhost:3000";
 
 const fetchOriginal = window.fetch.bind(window);
 
 window.fetch = async (url, options = {}) => {
-    const isApi = String(url).startsWith("/api/");
+    const urlString = String(url);
+    const isApi = urlString.startsWith("/api/");
 
     if (isApi) {
         options = {
@@ -45,22 +43,18 @@ window.fetch = async (url, options = {}) => {
             }
         };
 
-        url = API_BASE + url;
+        url = API_BASE + urlString;
     }
 
     const response = await fetchOriginal(url, options);
 
     if (isApi && response.status === 401) {
         AUTH.logout();
+        return response;
     }
 
     return response;
 };
-
-
-// ============================================================
-// PERMISSÕES DOS PERFIS
-// ============================================================
 
 const PERFIS = {
     ADMIN: {
@@ -73,34 +67,13 @@ const PERFIS = {
         menu: [
             "dashboard",
             "vendas",
-            "estoque",
-            "clientes",
-            "pagamentos"
-        ]
-    },
-
-    VENDEDOR: {
-        nome: "Vendedor",
-        menu: [
-            "dashboard",
-            "vendas",
-            "clientes",
-            "produtos"
-        ]
-    },
-
-    LOJISTA: {
-        nome: "Lojista",
-        menu: [
-            "dashboard",
             "produtos",
             "estoque",
-            "vendas",
-            "lojas",
-            "categorias"
+            "clientes",
+            "pagamentos",
+            "pendencias"
         ]
     },
-
     CLIENTE: {
         nome: "Cliente",
         menu: [
@@ -111,49 +84,75 @@ const PERFIS = {
     }
 };
 
+function podeAcessar(secao) {
+    const perfil = AUTH.user?.perfil;
+    const configuracao = PERFIS[perfil];
 
-// ============================================================
-// CONFIGURAÇÃO DA INTERFACE
-// ============================================================
+    if (!configuracao) {
+        return false;
+    }
+
+    if (configuracao.menu === null) {
+        return true;
+    }
+
+    return configuracao.menu.includes(secao);
+}
+
+function verificarAcesso(secao) {
+    if (!podeAcessar(secao)) {
+        if (typeof toast === "function") {
+            toast("Você não possui permissão para acessar esta área.", true);
+        }
+
+        return false;
+    }
+
+    return true;
+}
 
 document.addEventListener("DOMContentLoaded", () => {
+    const perfil = AUTH.user?.perfil;
+    const nome =
+        AUTH.user?.nome ||
+        AUTH.user?.login ||
+        "Usuário";
 
-    const perfil = AUTH.user.perfil;
-    const nome = AUTH.user.nome || AUTH.user.login || "Usuário";
-    const cfg = PERFIS[perfil];
+    const configuracao = PERFIS[perfil];
 
-    if (!cfg) {
+    if (!configuracao) {
         AUTH.logout();
         return;
     }
 
     document.querySelectorAll(".nav-item").forEach(botao => {
-
         const secao = botao.dataset.section;
 
         if (
-            cfg.menu !== null &&
-            !cfg.menu.includes(secao)
+            configuracao.menu !== null &&
+            !configuracao.menu.includes(secao)
         ) {
             botao.style.display = "none";
         }
-
     });
 
     const userName = document.getElementById("user-name");
-    const userRole = document.getElementById("user-role");
-    const userAvatar = document.getElementById("user-avatar");
 
     if (userName) {
         userName.textContent = nome;
     }
 
+    const userRole = document.getElementById("user-role");
+
     if (userRole) {
-        userRole.textContent = cfg.nome;
+        userRole.textContent = configuracao.nome;
     }
 
+    const userAvatar = document.getElementById("user-avatar");
+
     if (userAvatar) {
-        userAvatar.textContent = nome.charAt(0).toUpperCase();
+        userAvatar.textContent =
+            nome.charAt(0).toUpperCase();
     }
 
     const btnSair = document.getElementById("btn-sair");
@@ -166,24 +165,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const nav = document.querySelector("nav");
 
-    if (nav && !document.getElementById("btn-alterar-senha")) {
+    if (
+        nav &&
+        !document.getElementById("btn-alterar-senha")
+    ) {
+        const botaoSenha = document.createElement("button");
 
-        const pass = document.createElement("button");
+        botaoSenha.id = "btn-alterar-senha";
+        botaoSenha.className = "logout-btn";
+        botaoSenha.style.color = "#d1d5db";
+        botaoSenha.textContent = "🔑 Alterar senha";
 
-        pass.id = "btn-alterar-senha";
-        pass.className = "logout-btn";
-        pass.style.color = "#d1d5db";
-        pass.textContent = "🔑 Alterar senha";
-
-        pass.onclick = async () => {
-
+        botaoSenha.addEventListener("click", async () => {
             const atual = prompt("Senha atual:");
 
             if (atual === null) {
                 return;
             }
 
-            const nova = prompt("Nova senha (mín. 6 caracteres):");
+            const nova = prompt(
+                "Nova senha (mín. 6 caracteres):"
+            );
 
             if (nova === null) {
                 return;
@@ -191,14 +193,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (nova.length < 6) {
                 if (typeof toast === "function") {
-                    toast("A nova senha deve ter pelo menos 6 caracteres.", true);
+                    toast(
+                        "A nova senha deve ter pelo menos 6 caracteres.",
+                        true
+                    );
                 }
 
                 return;
             }
 
             try {
-
                 await api("senha", "POST", {
                     atual,
                     nova
@@ -207,17 +211,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (typeof toast === "function") {
                     toast("Senha alterada com sucesso!");
                 }
-
-            } catch (e) {
-
+            } catch (error) {
                 if (typeof toast === "function") {
-                    toast(e.message, true);
+                    toast(error.message, true);
                 }
-
             }
-        };
+        });
 
-        nav.appendChild(pass);
+        nav.appendChild(botaoSenha);
     }
-
 });

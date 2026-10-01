@@ -18,18 +18,25 @@ let saleItems = [];
 
 async function api(path, method = "GET", body) {
 
-    const res = await fetch("/api/" + path, {
+    const options = {
         method,
         headers: {
             "Content-Type": "application/json"
-        },
-        body: body ? JSON.stringify(body) : undefined
-    });
+        }
+    };
+
+    if (body !== undefined) {
+        options.body = JSON.stringify(body);
+    }
+
+    const res = await fetch("/api/" + path, options);
 
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-        throw new Error(data.erro || "Erro na requisição");
+        throw new Error(
+            data.erro || "Erro na requisição"
+        );
     }
 
     return data;
@@ -44,32 +51,141 @@ function toast(msg, error = false) {
 
     const t = document.createElement("div");
 
-    t.className = "toast" + (error ? " error" : "");
+    t.className =
+        "toast" + (error ? " error" : "");
+
     t.textContent = msg;
 
     document.body.appendChild(t);
 
-    setTimeout(() => t.remove(), 3500);
+    setTimeout(() => {
+        t.remove();
+    }, 3500);
 }
 
 
 // ============================================================
-// CARREGAMENTO DOS DADOS
+// PERMISSÕES
+// ============================================================
+
+function perfilAtual() {
+    return AUTH?.user?.perfil || "";
+}
+
+
+function temPermissao(secao) {
+
+    const perfil = perfilAtual();
+
+    const permissoes = {
+
+        ADMIN: [
+            "dashboard",
+            "vendas",
+            "produtos",
+            "estoque",
+            "clientes",
+            "fornecedores",
+            "categorias",
+            "lojas",
+            "pagamentos",
+            "pendencias",
+            "contas",
+            "extrato",
+            "relatorios",
+            "usuarios"
+        ],
+
+        OPERADOR: [
+            "dashboard",
+            "vendas",
+            "produtos",
+            "estoque",
+            "clientes",
+            "pagamentos",
+            "pendencias",
+            "extrato"
+        ],
+
+        CLIENTE: [
+            "dashboard",
+            "produtos",
+            "extrato"
+        ]
+    };
+
+    return (
+        permissoes[perfil]?.includes(secao) ||
+        false
+    );
+}
+
+
+function exigirPermissao(secao) {
+
+    if (!temPermissao(secao)) {
+
+        toast(
+            "Você não possui permissão para esta função.",
+            true
+        );
+
+        return false;
+    }
+
+    return true;
+}
+
+
+function exigirAdmin() {
+
+    if (perfilAtual() !== "ADMIN") {
+
+        toast(
+            "Apenas o administrador pode realizar esta função.",
+            true
+        );
+
+        return false;
+    }
+
+    return true;
+}
+
+
+function exigirOperacao(secao) {
+
+    if (perfilAtual() === "CLIENTE") {
+
+        toast(
+            "O perfil Cliente possui somente acesso para visualização.",
+            true
+        );
+
+        return false;
+    }
+
+    return exigirPermissao(secao);
+}
+
+
+// ============================================================
+// CARREGAR DADOS
 // ============================================================
 
 async function loadAll() {
 
-    const perfil = AUTH.user.perfil;
+    const perfil = perfilAtual();
+
+    clients = [];
+    stores = [];
+    categories = [];
+    suppliers = [];
+    products = [];
+    sales = [];
+    payments = [];
 
     try {
-
-        clients = [];
-        stores = [];
-        categories = [];
-        suppliers = [];
-        products = [];
-        sales = [];
-        payments = [];
 
         if (perfil === "ADMIN") {
 
@@ -82,6 +198,7 @@ async function loadAll() {
                 sales,
                 payments
             ] = await Promise.all([
+
                 api("clientes"),
                 api("lojas"),
                 api("categorias"),
@@ -89,59 +206,38 @@ async function loadAll() {
                 api("produtos"),
                 api("vendas"),
                 api("pagamentos")
+
             ]);
 
-        }
-
-        else if (perfil === "OPERADOR") {
+        } else if (perfil === "OPERADOR") {
 
             [
                 clients,
+                stores,
                 products,
                 sales,
                 payments
             ] = await Promise.all([
+
                 api("clientes"),
+                api("lojas"),
                 api("produtos"),
                 api("vendas"),
                 api("pagamentos")
+
             ]);
 
-        }
+            try {
+                suppliers =
+                    await api("fornecedores");
+            } catch {
+                suppliers = [];
+            }
 
-        else if (perfil === "VENDEDOR") {
+        } else if (perfil === "CLIENTE") {
 
-            [
-                clients,
-                products,
-                sales
-            ] = await Promise.all([
-                api("clientes"),
-                api("produtos"),
-                api("vendas")
-            ]);
-
-        }
-
-        else if (perfil === "LOJISTA") {
-
-            [
-                products,
-                stores,
-                categories,
-                sales
-            ] = await Promise.all([
-                api("produtos"),
-                api("lojas"),
-                api("categorias"),
-                api("vendas")
-            ]);
-
-        }
-
-        else if (perfil === "CLIENTE") {
-
-            products = await api("produtos");
+            products =
+                await api("produtos");
 
         }
 
@@ -149,8 +245,11 @@ async function loadAll() {
 
     } catch (e) {
 
-        toast("Falha ao carregar dados: " + e.message, true);
-
+        toast(
+            "Falha ao carregar dados: " +
+            e.message,
+            true
+        );
     }
 }
 
@@ -178,7 +277,7 @@ const titles = {
 
     estoque: [
         "Estoque",
-        "Controle de estoque"
+        "Controle de quantidade dos produtos"
     ],
 
     clientes: [
@@ -198,12 +297,42 @@ const titles = {
 
     lojas: [
         "Lojas",
-        "Gestão de lojas"
+        "Gestão de lojas físicas e online"
     ],
 
     pagamentos: [
         "Pagamentos",
-        "Controle financeiro"
+        "Controle e liquidação de pagamentos"
+    ],
+
+    pendencias: [
+        "Pendências",
+        "Vendas aguardando pagamento"
+    ],
+
+    contas: [
+        "Contas",
+        "Contas financeiras"
+    ],
+
+    extrato: [
+        "Extrato",
+        "Histórico financeiro do cliente"
+    ],
+
+    relatorios: [
+        "Relatórios",
+        "Resumo da operação comercial"
+    ],
+
+    usuarios: [
+        "Usuários",
+        "Controle de acesso"
+    ],
+
+    "minhas-compras": [
+        "Minhas compras",
+        "Histórico dos seus pedidos"
     ]
 };
 
@@ -212,19 +341,83 @@ const titles = {
 // INICIALIZAÇÃO
 // ============================================================
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
 
-    document.querySelectorAll(".nav-item").forEach(button => {
+        document
+            .querySelectorAll(".nav-item")
+            .forEach(button => {
 
-        button.addEventListener("click", () => {
-            showSection(button.dataset.section);
+                button.addEventListener(
+                    "click",
+                    () => {
+
+                        const section =
+                            button.dataset.section;
+
+                        showSection(section);
+                    }
+                );
+
+            });
+
+        esconderElementosDoCliente();
+
+        loadAll();
+
+    }
+);
+
+
+// ============================================================
+// OCULTAR AÇÕES DO CLIENTE
+// ============================================================
+
+function esconderElementosDoCliente() {
+
+    if (perfilAtual() !== "CLIENTE") {
+        return;
+    }
+
+    const seletores = [
+
+        "[onclick*='openModal']",
+        "[onclick*='save']",
+        "[onclick*='addSaleItem']",
+        "[onclick*='finishSale']",
+        "[onclick*='removeSaleItem']",
+        "#btn-nova-venda",
+        "#btn-add-product",
+        "#btn-add-client",
+        "#btn-add-supplier",
+        "#btn-add-category",
+        "#btn-add-store",
+        "#btn-add-stock",
+        "#btn-remove-stock",
+        "#btn-novo-produto",
+        "#btn-novo-cliente",
+        "#btn-novo-fornecedor",
+        "#btn-nova-categoria",
+        "#btn-nova-loja",
+        "#btn-novo-estoque",
+        "#btn-novo-usuario"
+    ];
+
+    document
+        .querySelectorAll(seletores.join(","))
+        .forEach(element => {
+            element.style.display = "none";
         });
 
-    });
-
-    loadAll();
-
-});
+    document
+        .querySelectorAll(
+            "#vendas form, #clientes form, #produtos form, #fornecedores form, #categorias form, #lojas form, #estoque form, #pagamentos form"
+        )
+        .forEach(form => {
+            form.style.display = "none";
+        });
+}
 
 
 // ============================================================
@@ -233,51 +426,123 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function showSection(section) {
 
-    const target = document.getElementById(section);
+    if (!exigirPermissao(section)) {
+        return;
+    }
+
+    const target =
+        document.getElementById(section);
 
     if (!target) {
         return;
     }
 
-    document.querySelectorAll(".section").forEach(el => {
-        el.classList.remove("active");
-    });
+    document
+        .querySelectorAll(".section")
+        .forEach(el => {
+            el.classList.remove("active");
+        });
 
     target.classList.add("active");
 
-    document.querySelectorAll(".nav-item").forEach(el => {
-        el.classList.remove("active");
-    });
+    document
+        .querySelectorAll(".nav-item")
+        .forEach(el => {
+            el.classList.remove("active");
+        });
 
-    const active = document.querySelector(
-        `[data-section="${section}"]`
-    );
+    const active =
+        document.querySelector(
+            `[data-section="${section}"]`
+        );
 
     if (active) {
         active.classList.add("active");
     }
 
-    const title = titles[section];
+    const title =
+        titles[section];
 
     if (title) {
 
-        const pageTitle = document.getElementById("page-title");
-        const pageSubtitle = document.getElementById("page-subtitle");
+        const pageTitle =
+            document.getElementById(
+                "page-title"
+            );
+
+        const pageSubtitle =
+            document.getElementById(
+                "page-subtitle"
+            );
 
         if (pageTitle) {
-            pageTitle.textContent = title[0];
+            pageTitle.textContent =
+                title[0];
         }
 
         if (pageSubtitle) {
-            pageSubtitle.textContent = title[1];
+            pageSubtitle.textContent =
+                title[1];
         }
-
     }
 
     if (section === "vendas") {
         updateSaleSelectors();
     }
 
+    if (section === "estoque") {
+
+        if (
+            typeof loadStock === "function"
+        ) {
+            loadStock();
+        }
+    }
+
+    if (section === "pendencias") {
+
+        if (
+            typeof loadPendencias === "function"
+        ) {
+            loadPendencias();
+        }
+    }
+
+    if (section === "pagamentos") {
+
+        if (
+            typeof loadPayments === "function"
+        ) {
+            loadPayments();
+        }
+    }
+
+    if (section === "extrato") {
+
+        if (
+            typeof loadExtrato === "function"
+        ) {
+            loadExtrato();
+        }
+    }
+
+    if (section === "relatorios") {
+
+        if (
+            typeof loadRelatorios === "function"
+        ) {
+            loadRelatorios();
+        }
+    }
+
+    if (section === "usuarios") {
+
+        if (
+            typeof loadUsuarios === "function"
+        ) {
+            loadUsuarios();
+        }
+    }
 }
 
 
@@ -287,10 +552,35 @@ function showSection(section) {
 
 function openModal(id) {
 
-    const modal = document.getElementById(id);
+    const modal =
+        document.getElementById(id);
 
     if (!modal) {
         return;
+    }
+
+    const permissoesModal = {
+
+        "product-modal": "produtos",
+        "stock-modal": "estoque",
+        "supplier-modal": "fornecedores",
+        "category-modal": "categorias",
+        "store-modal": "lojas",
+        "client-modal": "clientes",
+        "user-modal": "usuarios",
+        "pay-modal": "pagamentos",
+        "sale-modal": "vendas",
+        "stock-remove-modal": "estoque"
+    };
+
+    const permissao =
+        permissoesModal[id];
+
+    if (permissao) {
+
+        if (!exigirOperacao(permissao)) {
+            return;
+        }
     }
 
     modal.classList.add("show");
@@ -317,20 +607,97 @@ function openModal(id) {
             "Selecione um fornecedor",
             x => x.razao_social
         );
-
     }
 
+    if (id === "stock-modal") {
+
+        populateSelect(
+            "stock-product",
+            products,
+            "Selecione um produto",
+            x =>
+                `${x.nome} - estoque: ${x.estoque || 0}`
+        );
+
+        populateSelect(
+            "stock-supplier",
+            suppliers,
+            "Selecione um fornecedor",
+            x => x.razao_social
+        );
+    }
+
+    if (id === "user-modal") {
+
+        if (!exigirAdmin()) {
+            closeModal(id);
+            return;
+        }
+
+        populateSelect(
+            "user-client",
+            clients,
+            "Selecione o cliente",
+            x => x.nome
+        );
+
+        if (
+            typeof toggleUserClient ===
+            "function"
+        ) {
+            toggleUserClient();
+        }
+    }
+
+    if (id === "pay-modal") {
+
+        const saleId =
+            document.getElementById(
+                "pay-sale"
+            )?.value;
+
+        if (saleId) {
+
+            const sale =
+                sales.find(
+                    s =>
+                        Number(s.id) ===
+                        Number(saleId)
+                );
+
+            if (sale) {
+
+                const value =
+                    Number(sale.total || 0) -
+                    Number(sale.pago || 0);
+
+                const input =
+                    document.getElementById(
+                        "pay-value"
+                    );
+
+                if (input) {
+
+                    input.value =
+                        value > 0
+                            ? value.toFixed(2)
+                            : "";
+
+                }
+            }
+        }
+    }
 }
 
 
 function closeModal(id) {
 
-    const modal = document.getElementById(id);
+    const modal =
+        document.getElementById(id);
 
     if (modal) {
         modal.classList.remove("show");
     }
-
 }
 
 
@@ -340,30 +707,30 @@ function closeModal(id) {
 
 function money(value) {
 
-    return Number(value || 0).toLocaleString(
-        "pt-BR",
-        {
-            style: "currency",
-            currency: "BRL"
-        }
-    );
-
+    return Number(value || 0)
+        .toLocaleString(
+            "pt-BR",
+            {
+                style: "currency",
+                currency: "BRL"
+            }
+        );
 }
 
 
 function escapeHtml(value) {
 
-    return String(value ?? "").replace(
-        /[&<>"']/g,
-        char => ({
-            "&": "&amp;",
-            "<": "&lt;",
-            ">": "&gt;",
-            '"': "&quot;",
-            "'": "&#039;"
-        }[char])
-    );
-
+    return String(value ?? "")
+        .replace(
+            /[&<>"']/g,
+            char => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#039;"
+            }[char])
+        );
 }
 
 
@@ -374,7 +741,8 @@ function populateSelect(
     labelFunction
 ) {
 
-    const select = document.getElementById(id);
+    const select =
+        document.getElementById(id);
 
     if (!select) {
         return;
@@ -382,6 +750,10 @@ function populateSelect(
 
     select.innerHTML =
         `<option value="">${placeholder}</option>`;
+
+    if (!Array.isArray(items)) {
+        return;
+    }
 
     items.forEach(item => {
 
@@ -395,56 +767,44 @@ function populateSelect(
 
         select.innerHTML += `
             <option value="${idValue}">
-                ${escapeHtml(labelFunction(item))}
+                ${escapeHtml(
+                    labelFunction(item)
+                )}
             </option>
         `;
-
     });
+}
 
+
+function val(id) {
+
+    return (
+        document.getElementById(id)
+            ?.value || ""
+    );
 }
 
 
 // ============================================================
-// RENDERIZAÇÃO GERAL
+// RENDERIZAÇÃO
 // ============================================================
 
 function renderAll() {
 
-    if (document.getElementById("clients-table")) {
-        renderClients();
-    }
-
-    if (document.getElementById("products-table")) {
-        renderProducts();
-    }
-
-    if (document.getElementById("stock-table")) {
-        renderStock();
-    }
-
-    if (document.getElementById("suppliers-table")) {
-        renderSuppliers();
-    }
-
-    if (document.getElementById("categories-table")) {
-        renderCategories();
-    }
-
-    if (document.getElementById("stores-table")) {
-        renderStores();
-    }
-
-    if (document.getElementById("sales-table")) {
-        renderSales();
-    }
-
-    if (document.getElementById("payments-table")) {
-        renderPayments();
-    }
+    renderClients();
+    renderProducts();
+    renderStock();
+    renderSuppliers();
+    renderCategories();
+    renderStores();
+    renderSales();
+    renderPayments();
 
     updateDashboard();
     updateSaleSelectors();
+    renderSaleItems();
 
+    esconderElementosDoCliente();
 }
 
 
@@ -454,22 +814,49 @@ function renderAll() {
 
 function renderClients() {
 
-    const table = document.getElementById("clients-table");
+    const table =
+        document.getElementById(
+            "clients-table"
+        );
 
     if (!table) {
         return;
     }
 
-    table.innerHTML = clients.map(c => `
-        <tr>
-            <td>${c.id}</td>
-            <td>${escapeHtml(c.nome)}</td>
-            <td>${escapeHtml(c.cpf)}</td>
-            <td>${escapeHtml(c.email)}</td>
-            <td>${escapeHtml(c.telefone)}</td>
-        </tr>
-    `).join("");
+    table.innerHTML =
+        clients.length
 
+            ? clients.map(c => `
+                <tr>
+
+                    <td>${c.id}</td>
+
+                    <td>
+                        ${escapeHtml(c.nome)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(c.cpf)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(c.email)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(c.telefone)}
+                    </td>
+
+                </tr>
+            `).join("")
+
+            : `
+                <tr>
+                    <td colspan="5" class="empty">
+                        Nenhum cliente cadastrado.
+                    </td>
+                </tr>
+            `;
 }
 
 
@@ -479,70 +866,113 @@ function renderClients() {
 
 function renderProducts() {
 
-    const table = document.getElementById("products-table");
+    const table =
+        document.getElementById(
+            "products-table"
+        );
 
     if (!table) {
         return;
     }
 
     const search =
-        document.getElementById("product-search")?.value
-            ?.toLowerCase() || "";
+        document.getElementById(
+            "product-search"
+        )?.value
+        ?.toLowerCase() || "";
 
-    const filtered = products.filter(p =>
-        String(p.nome).toLowerCase().includes(search)
-    );
-
-    table.innerHTML = filtered.map(p => {
-
-        const cat = categories.find(
-            c => c.id === p.categoria
+    const filtered =
+        products.filter(
+            p =>
+                String(p.nome)
+                    .toLowerCase()
+                    .includes(search)
         );
 
-        const store = stores.find(
-            s => s.id === p.loja
-        );
+    table.innerHTML =
+        filtered.length
 
-        return `
-            <tr>
-                <td>${p.id}</td>
+            ? filtered.map(p => {
 
-                <td>
-                    <strong>${escapeHtml(p.nome)}</strong>
-                </td>
+                const cat =
+                    categories.find(
+                        c =>
+                            Number(c.id) ===
+                            Number(p.categoria)
+                    );
 
-                <td>
-                    ${escapeHtml(cat?.nome || "-")}
-                </td>
+                const store =
+                    stores.find(
+                        s =>
+                            Number(s.id) ===
+                            Number(p.loja)
+                    );
 
-                <td>
-                    ${escapeHtml(store?.nome || "-")}
-                </td>
+                const categoriaNome =
+                    p.categoria_nome ||
+                    cat?.nome ||
+                    "-";
 
-                <td>
-                    ${money(p.preco)}
-                </td>
+                const lojaNome =
+                    p.loja_nome ||
+                    store?.nome ||
+                    "-";
 
-                <td>
-                    ${
-                        p.tendencia
-                            ? '<span class="badge green">Sim</span>'
-                            : "Não"
-                    }
-                </td>
+                return `
+                    <tr>
 
-                <td>
-                    ${
-                        p.novidade
-                            ? '<span class="badge green">Sim</span>'
-                            : "Não"
-                    }
-                </td>
-            </tr>
-        `;
+                        <td>${p.id}</td>
 
-    }).join("");
+                        <td>
+                            <strong>
+                                ${escapeHtml(p.nome)}
+                            </strong>
+                        </td>
 
+                        <td>
+                            ${escapeHtml(
+                                categoriaNome
+                            )}
+                        </td>
+
+                        <td>
+                            ${escapeHtml(
+                                lojaNome
+                            )}
+                        </td>
+
+                        <td>
+                            ${money(p.preco)}
+                        </td>
+
+                        <td>
+                            ${
+                                Number(p.tendencia)
+                                    ? '<span class="badge green">Sim</span>'
+                                    : "Não"
+                            }
+                        </td>
+
+                        <td>
+                            ${
+                                Number(p.novidade)
+                                    ? '<span class="badge green">Sim</span>'
+                                    : "Não"
+                            }
+                        </td>
+
+                    </tr>
+                `;
+
+            }).join("")
+
+            : `
+                <tr>
+                    <td colspan="7" class="empty">
+                        Nenhum produto encontrado.
+                    </td>
+                </tr>
+            `;
 }
 
 
@@ -552,57 +982,88 @@ function renderProducts() {
 
 function renderStock() {
 
-    const table = document.getElementById("stock-table");
+    const table =
+        document.getElementById(
+            "stock-table"
+        );
 
     if (!table) {
         return;
     }
 
-    table.innerHTML = products.map(p => {
+    table.innerHTML =
+        products.length
 
-        const supplier = suppliers.find(
-            s => s.id === p.fornecedor
-        );
+            ? products.map(p => {
 
-        let badge;
+                const supplier =
+                    suppliers.find(
+                        s =>
+                            Number(s.id) ===
+                            Number(p.fornecedor)
+                    );
 
-        if (p.estoque <= 0) {
+                const fornecedorNome =
+                    p.fornecedor_nome ||
+                    supplier?.razao_social ||
+                    "-";
 
-            badge =
-                '<span class="badge red">Sem estoque</span>';
+                const quantidade =
+                    Number(p.estoque || 0);
 
-        } else if (p.estoque <= 5) {
+                let badge;
 
-            badge =
-                '<span class="badge yellow">Estoque baixo</span>';
+                if (quantidade <= 0) {
 
-        } else {
+                    badge =
+                        '<span class="badge red">Sem estoque</span>';
 
-            badge =
-                '<span class="badge green">Normal</span>';
+                } else if (quantidade <= 5) {
 
-        }
+                    badge =
+                        '<span class="badge yellow">Estoque baixo</span>';
 
-        return `
-            <tr>
-                <td>${escapeHtml(p.nome)}</td>
+                } else {
 
-                <td>
-                    ${escapeHtml(
-                        supplier?.razao_social || "-"
-                    )}
-                </td>
+                    badge =
+                        '<span class="badge green">Normal</span>';
+                }
 
-                <td>
-                    <strong>${p.estoque}</strong>
-                </td>
+                return `
+                    <tr>
 
-                <td>${badge}</td>
-            </tr>
-        `;
+                        <td>
+                            ${escapeHtml(p.nome)}
+                        </td>
 
-    }).join("");
+                        <td>
+                            ${escapeHtml(
+                                fornecedorNome
+                            )}
+                        </td>
 
+                        <td>
+                            <strong>
+                                ${quantidade}
+                            </strong>
+                        </td>
+
+                        <td>
+                            ${badge}
+                        </td>
+
+                    </tr>
+                `;
+
+            }).join("")
+
+            : `
+                <tr>
+                    <td colspan="4" class="empty">
+                        Nenhum produto cadastrado.
+                    </td>
+                </tr>
+            `;
 }
 
 
@@ -613,22 +1074,50 @@ function renderStock() {
 function renderSuppliers() {
 
     const table =
-        document.getElementById("suppliers-table");
+        document.getElementById(
+            "suppliers-table"
+        );
 
     if (!table) {
         return;
     }
 
-    table.innerHTML = suppliers.map(s => `
-        <tr>
-            <td>${s.id}</td>
-            <td>${escapeHtml(s.razao_social)}</td>
-            <td>${escapeHtml(s.cnpj)}</td>
-            <td>${escapeHtml(s.email)}</td>
-            <td>${escapeHtml(s.telefone)}</td>
-        </tr>
-    `).join("");
+    table.innerHTML =
+        suppliers.length
 
+            ? suppliers.map(s => `
+                <tr>
+
+                    <td>${s.id}</td>
+
+                    <td>
+                        ${escapeHtml(
+                            s.razao_social
+                        )}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(s.cnpj)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(s.email)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(s.telefone)}
+                    </td>
+
+                </tr>
+            `).join("")
+
+            : `
+                <tr>
+                    <td colspan="5" class="empty">
+                        Nenhum fornecedor cadastrado.
+                    </td>
+                </tr>
+            `;
 }
 
 
@@ -639,20 +1128,40 @@ function renderSuppliers() {
 function renderCategories() {
 
     const table =
-        document.getElementById("categories-table");
+        document.getElementById(
+            "categories-table"
+        );
 
     if (!table) {
         return;
     }
 
-    table.innerHTML = categories.map(c => `
-        <tr>
-            <td>${c.id}</td>
-            <td>${escapeHtml(c.nome)}</td>
-            <td>${escapeHtml(c.descricao)}</td>
-        </tr>
-    `).join("");
+    table.innerHTML =
+        categories.length
 
+            ? categories.map(c => `
+                <tr>
+
+                    <td>${c.id}</td>
+
+                    <td>
+                        ${escapeHtml(c.nome)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(c.descricao)}
+                    </td>
+
+                </tr>
+            `).join("")
+
+            : `
+                <tr>
+                    <td colspan="3" class="empty">
+                        Nenhuma categoria cadastrada.
+                    </td>
+                </tr>
+            `;
 }
 
 
@@ -663,21 +1172,44 @@ function renderCategories() {
 function renderStores() {
 
     const table =
-        document.getElementById("stores-table");
+        document.getElementById(
+            "stores-table"
+        );
 
     if (!table) {
         return;
     }
 
-    table.innerHTML = stores.map(s => `
-        <tr>
-            <td>${s.id}</td>
-            <td>${escapeHtml(s.nome)}</td>
-            <td>${escapeHtml(s.tipo)}</td>
-            <td>${escapeHtml(s.endereco)}</td>
-        </tr>
-    `).join("");
+    table.innerHTML =
+        stores.length
 
+            ? stores.map(s => `
+                <tr>
+
+                    <td>${s.id}</td>
+
+                    <td>
+                        ${escapeHtml(s.nome)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(s.tipo)}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(s.endereco)}
+                    </td>
+
+                </tr>
+            `).join("")
+
+            : `
+                <tr>
+                    <td colspan="4" class="empty">
+                        Nenhuma loja cadastrada.
+                    </td>
+                </tr>
+            `;
 }
 
 
@@ -688,123 +1220,170 @@ function renderStores() {
 function renderSales() {
 
     const table =
-        document.getElementById("sales-table");
+        document.getElementById(
+            "sales-table"
+        );
 
     if (!table) {
         return;
     }
 
     const search =
-        document.getElementById("sales-search")?.value
-            ?.toLowerCase() || "";
+        document.getElementById(
+            "sales-search"
+        )?.value
+        ?.toLowerCase() || "";
 
-    const filtered = sales.filter(s =>
-        String(s.id).includes(search) ||
-        getClientName(s.cliente)
-            .toLowerCase()
-            .includes(search)
-    );
+    const filtered =
+        sales.filter(s => {
 
-    table.innerHTML = filtered.length
+            const cliente =
+                getClientName(
+                    s.cliente
+                ).toLowerCase();
 
-        ? filtered.map(s => `
-            <tr>
-                <td>#${s.id}</td>
+            return (
+                String(s.id)
+                    .toLowerCase()
+                    .includes(search) ||
+                cliente.includes(search)
+            );
+        });
 
-                <td>
-                    ${new Date(s.data)
-                        .toLocaleString("pt-BR")}
-                </td>
+    table.innerHTML =
+        filtered.length
 
-                <td>
-                    ${escapeHtml(
-                        getClientName(s.cliente)
-                    )}
-                </td>
+            ? filtered.map(s => {
 
-                <td>
-                    ${escapeHtml(
-                        getStoreName(s.loja)
-                    )}
-                </td>
+                const status =
+                    s.status ===
+                    "CONCLUIDO";
 
-                <td>
-                    ${escapeHtml(s.canal)}
-                </td>
+                return `
+                    <tr>
 
-                <td>
-                    <strong>
-                        ${money(s.total)}
-                    </strong>
-                </td>
+                        <td>#${s.id}</td>
 
-                <td>
-                    <span class="badge ${
-                        s.status === "CONCLUIDO"
-                            ? "green"
-                            : "yellow"
-                    }">
-                        ${escapeHtml(s.status)}
-                    </span>
-                </td>
-            </tr>
-        `).join("")
+                        <td>
+                            ${formatDate(s.data)}
+                        </td>
 
-        : `
-            <tr>
-                <td colspan="7" class="empty">
-                    Nenhuma venda encontrada.
-                </td>
-            </tr>
-        `;
+                        <td>
+                            ${escapeHtml(
+                                s.cliente_nome ||
+                                getClientName(
+                                    s.cliente
+                                )
+                            )}
+                        </td>
+
+                        <td>
+                            ${escapeHtml(
+                                s.loja_nome ||
+                                getStoreName(
+                                    s.loja
+                                )
+                            )}
+                        </td>
+
+                        <td>
+                            ${escapeHtml(
+                                s.canal
+                            )}
+                        </td>
+
+                        <td>
+                            <strong>
+                                ${money(s.total)}
+                            </strong>
+                        </td>
+
+                        <td>
+                            <span class="badge ${
+                                status
+                                    ? "green"
+                                    : "yellow"
+                            }">
+                                ${
+                                    status
+                                        ? "CONCLUÍDO"
+                                        : "ABERTA"
+                                }
+                            </span>
+                        </td>
+
+                    </tr>
+                `;
+
+            }).join("")
+
+            : `
+                <tr>
+                    <td colspan="7" class="empty">
+                        Nenhuma venda encontrada.
+                    </td>
+                </tr>
+            `;
 
     renderRecentSales();
-
 }
 
 
 function renderRecentSales() {
 
     const element =
-        document.getElementById("recent-sales");
+        document.getElementById(
+            "recent-sales"
+        );
 
     if (!element) {
         return;
     }
 
     const recent =
-        [...sales].reverse().slice(0, 5);
+        [...sales]
+            .sort(
+                (a, b) =>
+                    new Date(b.data) -
+                    new Date(a.data)
+            )
+            .slice(0, 5);
 
-    element.innerHTML = recent.length
+    element.innerHTML =
+        recent.length
 
-        ? recent.map(s => `
-            <div class="recent-item">
+            ? recent.map(s => `
+                <div class="recent-item">
 
-                <div>
+                    <div>
+
+                        <strong>
+                            Venda #${s.id}
+                        </strong>
+
+                        <small>
+                            ${escapeHtml(
+                                s.cliente_nome ||
+                                getClientName(
+                                    s.cliente
+                                )
+                            )}
+                        </small>
+
+                    </div>
+
                     <strong>
-                        Venda #${s.id}
+                        ${money(s.total)}
                     </strong>
 
-                    <small>
-                        ${escapeHtml(
-                            getClientName(s.cliente)
-                        )}
-                    </small>
                 </div>
+            `).join("")
 
-                <strong>
-                    ${money(s.total)}
-                </strong>
-
-            </div>
-        `).join("")
-
-        : `
-            <div class="empty">
-                Nenhuma venda registrada.
-            </div>
-        `;
-
+            : `
+                <div class="empty">
+                    Nenhuma venda registrada.
+                </div>
+            `;
 }
 
 
@@ -815,42 +1394,52 @@ function renderRecentSales() {
 function renderPayments() {
 
     const table =
-        document.getElementById("payments-table");
+        document.getElementById(
+            "payments-table"
+        );
 
     if (!table) {
         return;
     }
 
-    table.innerHTML = payments.length
+    table.innerHTML =
+        payments.length
 
-        ? payments.map(p => `
-            <tr>
-                <td>${p.id}</td>
-                <td>#${p.venda}</td>
-                <td>${escapeHtml(p.forma)}</td>
-                <td>${money(p.valor)}</td>
+            ? payments.map(p => `
+                <tr>
 
-                <td>
-                    <span class="badge green">
-                        ${escapeHtml(p.status)}
-                    </span>
-                </td>
+                    <td>${p.id}</td>
 
-                <td>
-                    ${new Date(p.data)
-                        .toLocaleString("pt-BR")}
-                </td>
-            </tr>
-        `).join("")
+                    <td>#${p.venda}</td>
 
-        : `
-            <tr>
-                <td colspan="6" class="empty">
-                    Nenhum pagamento registrado.
-                </td>
-            </tr>
-        `;
+                    <td>
+                        ${escapeHtml(p.forma)}
+                    </td>
 
+                    <td>
+                        ${money(p.valor)}
+                    </td>
+
+                    <td>
+                        <span class="badge green">
+                            ${escapeHtml(p.status)}
+                        </span>
+                    </td>
+
+                    <td>
+                        ${formatDate(p.data)}
+                    </td>
+
+                </tr>
+            `).join("")
+
+            : `
+                <tr>
+                    <td colspan="6" class="empty">
+                        Nenhum pagamento registrado.
+                    </td>
+                </tr>
+            `;
 }
 
 
@@ -860,83 +1449,118 @@ function renderPayments() {
 
 function updateDashboard() {
 
+    const perfil =
+        perfilAtual();
+
     const today =
         new Date().toDateString();
 
-    const todaySales = sales
-        .filter(s =>
-            new Date(s.data).toDateString() === today
-        )
-        .reduce(
-            (sum, s) =>
-                sum + Number(s.total || 0),
-            0
-        );
+    const todaySales =
+        sales
+            .filter(
+                s =>
+                    new Date(s.data)
+                        .toDateString() ===
+                    today &&
+                    s.status === "CONCLUIDO"
+            )
+            .reduce(
+                (sum, s) =>
+                    sum +
+                    Number(s.total || 0),
+                0
+            );
 
     const dashSales =
-        document.getElementById("dash-sales");
+        document.getElementById(
+            "dash-sales"
+        );
 
     const dashProducts =
-        document.getElementById("dash-products");
+        document.getElementById(
+            "dash-products"
+        );
 
     const dashClients =
-        document.getElementById("dash-clients");
+        document.getElementById(
+            "dash-clients"
+        );
 
     const dashLowStock =
-        document.getElementById("dash-low-stock");
+        document.getElementById(
+            "dash-low-stock"
+        );
 
     if (dashSales) {
-        dashSales.textContent = money(todaySales);
+        dashSales.textContent =
+            money(todaySales);
     }
 
     if (dashProducts) {
-        dashProducts.textContent = products.length;
+        dashProducts.textContent =
+            products.length;
     }
 
     if (dashClients) {
-        dashClients.textContent = clients.length;
+
+        if (perfil === "CLIENTE") {
+            dashClients.textContent = "—";
+        } else {
+            dashClients.textContent =
+                clients.length;
+        }
     }
 
     if (dashLowStock) {
-        dashLowStock.textContent =
-            products.filter(p => p.estoque <= 5).length;
-    }
 
+        if (perfil === "CLIENTE") {
+            dashLowStock.textContent = "—";
+        } else {
+
+            dashLowStock.textContent =
+                products.filter(
+                    p =>
+                        Number(
+                            p.estoque || 0
+                        ) <= 5
+                ).length;
+        }
+    }
 }
 
 
 // ============================================================
-// SELETORES DE VENDA
+// SELETORES DA VENDA
 // ============================================================
 
 function updateSaleSelectors() {
 
-    const client =
-        document.getElementById("sale-client");
+    if (!temPermissao("vendas")) {
+        return;
+    }
 
-    const store =
-        document.getElementById("sale-store");
+    if (perfilAtual() === "CLIENTE") {
+        return;
+    }
+
+    populateSelect(
+        "sale-client",
+        clients,
+        "Selecione o cliente",
+        c => c.nome
+    );
+
+    populateSelect(
+        "sale-store",
+        stores,
+        "Selecione a loja",
+        s => s.nome
+    );
 
     const productSelect =
-        document.getElementById("sale-product");
-
-    if (client) {
-        populateSelect(
-            "sale-client",
-            clients,
-            "Selecione o cliente",
-            c => c.nome
+        document.getElementById(
+            "sale-product"
         );
-    }
-
-    if (store) {
-        populateSelect(
-            "sale-store",
-            stores,
-            "Selecione a loja",
-            s => s.nome
-        );
-    }
 
     if (!productSelect) {
         return;
@@ -947,20 +1571,20 @@ function updateSaleSelectors() {
 
     products.forEach(p => {
 
-        if (Number(p.estoque) > 0) {
+        const estoque =
+            Number(p.estoque || 0);
+
+        if (estoque > 0) {
 
             productSelect.innerHTML += `
                 <option value="${p.id}">
                     ${escapeHtml(p.nome)}
                     - ${money(p.preco)}
-                    (${p.estoque} disponíveis)
+                    (${estoque} disponíveis)
                 </option>
             `;
-
         }
-
     });
-
 }
 
 
@@ -970,20 +1594,32 @@ function updateSaleSelectors() {
 
 function addSaleItem() {
 
+    if (!exigirOperacao("vendas")) {
+        return;
+    }
+
     const productId =
         Number(
-            document.getElementById("sale-product").value
+            document.getElementById(
+                "sale-product"
+            )?.value
         );
 
     const qty =
         Number(
-            document.getElementById("sale-qty").value
+            document.getElementById(
+                "sale-qty"
+            )?.value
         );
 
-    if (!productId || qty <= 0) {
+    if (
+        !productId ||
+        qty <= 0 ||
+        !Number.isInteger(qty)
+    ) {
 
         toast(
-            "Selecione um produto e informe uma quantidade válida.",
+            "Selecione um produto e informe uma quantidade inteira válida.",
             true
         );
 
@@ -991,24 +1627,40 @@ function addSaleItem() {
     }
 
     const product =
-        products.find(p => p.id === productId);
+        products.find(
+            p =>
+                Number(p.id) ===
+                productId
+        );
 
     if (!product) {
+
+        toast(
+            "Produto não encontrado.",
+            true
+        );
+
         return;
     }
 
+    const estoque =
+        Number(product.estoque || 0);
+
     const existing =
         saleItems.find(
-            item => item.produto === productId
+            item =>
+                Number(item.produto) ===
+                productId
         );
 
     const totalQty =
-        (existing?.quantidade || 0) + qty;
+        (existing?.quantidade || 0) +
+        qty;
 
-    if (totalQty > product.estoque) {
+    if (totalQty > estoque) {
 
         toast(
-            `Estoque insuficiente. Disponível: ${product.estoque}`,
+            `Estoque insuficiente. Disponível: ${estoque}`,
             true
         );
 
@@ -1024,76 +1676,45 @@ function addSaleItem() {
         saleItems.push({
             produto: productId,
             quantidade: qty,
-            preco: product.preco
+            preco: Number(
+                product.preco
+            )
         });
-
     }
 
     renderSaleItems();
-
 }
 
 
 function removeSaleItem(index) {
 
-    saleItems.splice(index, 1);
+    if (!exigirOperacao("vendas")) {
+        return;
+    }
+
+    saleItems.splice(
+        index,
+        1
+    );
 
     renderSaleItems();
-
 }
 
 
 function renderSaleItems() {
 
     const tbody =
-        document.getElementById("sale-items");
+        document.getElementById(
+            "sale-items"
+        );
 
     if (!tbody) {
         return;
     }
 
-    tbody.innerHTML = saleItems.length
+    if (!saleItems.length) {
 
-        ? saleItems.map((item, index) => {
-
-            const p =
-                products.find(
-                    x => x.id === item.produto
-                );
-
-            return `
-                <tr>
-                    <td>
-                        ${escapeHtml(p?.nome || "")}
-                    </td>
-
-                    <td>
-                        ${item.quantidade}
-                    </td>
-
-                    <td>
-                        ${money(item.preco)}
-                    </td>
-
-                    <td>
-                        ${money(
-                            item.quantidade * item.preco
-                        )}
-                    </td>
-
-                    <td>
-                        <button
-                            class="icon-btn"
-                            onclick="removeSaleItem(${index})">
-                            🗑️
-                        </button>
-                    </td>
-                </tr>
-            `;
-
-        }).join("")
-
-        : `
+        tbody.innerHTML = `
             <tr>
                 <td colspan="5" class="empty">
                     Nenhum item adicionado.
@@ -1101,20 +1722,83 @@ function renderSaleItems() {
             </tr>
         `;
 
+    } else {
+
+        tbody.innerHTML =
+            saleItems.map(
+                (item, index) => {
+
+                    const product =
+                        products.find(
+                            p =>
+                                Number(p.id) ===
+                                Number(item.produto)
+                        );
+
+                    return `
+                        <tr>
+
+                            <td>
+                                ${escapeHtml(
+                                    product?.nome || ""
+                                )}
+                            </td>
+
+                            <td>
+                                ${item.quantidade}
+                            </td>
+
+                            <td>
+                                ${money(
+                                    item.preco
+                                )}
+                            </td>
+
+                            <td>
+                                ${money(
+                                    item.quantidade *
+                                    item.preco
+                                )}
+                            </td>
+
+                            <td>
+
+                                <button
+                                    type="button"
+                                    class="icon-btn"
+                                    onclick="removeSaleItem(${index})">
+
+                                    🗑️
+
+                                </button>
+
+                            </td>
+
+                        </tr>
+                    `;
+
+                }
+            ).join("");
+    }
+
     const total =
         saleItems.reduce(
             (sum, item) =>
-                sum + item.quantidade * item.preco,
+                sum +
+                item.quantidade *
+                Number(item.preco),
             0
         );
 
     const saleTotal =
-        document.getElementById("sale-total");
+        document.getElementById(
+            "sale-total"
+        );
 
     if (saleTotal) {
-        saleTotal.textContent = money(total);
+        saleTotal.textContent =
+            money(total);
     }
-
 }
 
 
@@ -1124,14 +1808,22 @@ function renderSaleItems() {
 
 async function finishSale() {
 
+    if (!exigirOperacao("vendas")) {
+        return;
+    }
+
     const cliente =
         Number(
-            document.getElementById("sale-client").value
+            document.getElementById(
+                "sale-client"
+            )?.value
         );
 
     const loja =
         Number(
-            document.getElementById("sale-store").value
+            document.getElementById(
+                "sale-store"
+            )?.value
         );
 
     if (!cliente || !loja) {
@@ -1154,69 +1846,133 @@ async function finishSale() {
         return;
     }
 
-    try {
-
-        const r = await api(
-            "vendas",
-            "POST",
-            {
-                cliente,
-                loja,
-
-                canal:
-                    document.getElementById(
-                        "sale-channel"
-                    ).value,
-
-                forma:
-                    document.getElementById(
-                        "sale-payment"
-                    ).value,
-
-                valorPago:
-                    val("sale-paid") || undefined,
-
-                itens:
-                    saleItems.map(i => ({
-                        produto: i.produto,
-                        quantidade: i.quantidade
-                    }))
-            }
+    const total =
+        saleItems.reduce(
+            (sum, item) =>
+                sum +
+                item.quantidade *
+                Number(item.preco),
+            0
         );
 
+    let valorPago =
+        Number(
+            document.getElementById(
+                "sale-paid"
+            )?.value
+        );
+
+    if (
+        Number.isNaN(valorPago) ||
+        valorPago < 0
+    ) {
+        valorPago = 0;
+    }
+
+    if (valorPago > total) {
+
+        toast(
+            "O valor pago não pode ser maior que o total da venda.",
+            true
+        );
+
+        return;
+    }
+
+    try {
+
+        const response =
+            await api(
+                "vendas",
+                "POST",
+                {
+                    cliente,
+                    loja,
+
+                    canal:
+                        document.getElementById(
+                            "sale-channel"
+                        )?.value ||
+                        "Loja física",
+
+                    forma:
+                        document.getElementById(
+                            "sale-payment"
+                        )?.value ||
+                        "PIX",
+
+                    valorPago,
+
+                    itens:
+                        saleItems.map(
+                            item => ({
+                                produto:
+                                    Number(
+                                        item.produto
+                                    ),
+
+                                quantidade:
+                                    Number(
+                                        item.quantidade
+                                    )
+                            })
+                        )
+                }
+            );
+
         saleItems = [];
+
+        const paidInput =
+            document.getElementById(
+                "sale-paid"
+            );
+
+        if (paidInput) {
+            paidInput.value = "";
+        }
 
         renderSaleItems();
 
         await loadAll();
 
         toast(
-            `Venda #${r.id} realizada com sucesso!`
+            `Venda #${response.id} registrada com sucesso!`
         );
+
+        showSection("vendas");
 
     } catch (e) {
 
-        toast(e.message, true);
+        toast(
+            e.message,
+            true
+        );
 
         await loadAll();
-
     }
-
 }
 
 
 // ============================================================
-// SALVAR
+// SALVAR DADOS
 // ============================================================
 
 async function save(
     event,
     modal,
     path,
-    body
+    body,
+    permissao
 ) {
 
     event.preventDefault();
+
+    if (
+        permissao &&
+        !exigirOperacao(permissao)
+    ) {
+        return;
+    }
 
     try {
 
@@ -1232,124 +1988,240 @@ async function save(
 
         await loadAll();
 
-        toast("Cadastrado com sucesso!");
+        toast(
+            "Cadastro realizado com sucesso!"
+        );
 
     } catch (e) {
 
-        toast(e.message, true);
-
+        toast(
+            e.message,
+            true
+        );
     }
-
 }
 
 
-const val = id =>
-    document.getElementById(id)?.value || "";
-
-
 // ============================================================
-// FORMULÁRIOS
+// CLIENTE
 // ============================================================
 
 function saveClient(event) {
+
+    if (!exigirOperacao("clientes")) {
+        event.preventDefault();
+        return;
+    }
 
     save(
         event,
         "client-modal",
         "clientes",
         {
-            nome: val("client-name"),
-            cpf: val("client-cpf"),
-            email: val("client-email"),
-            telefone: val("client-phone")
-        }
-    );
+            nome:
+                val("client-name"),
 
+            cpf:
+                val("client-cpf"),
+
+            email:
+                val("client-email"),
+
+            telefone:
+                val("client-phone")
+        },
+        "clientes"
+    );
 }
 
 
+// ============================================================
+// PRODUTO
+// ============================================================
+
 function saveProduct(event) {
+
+    if (!exigirAdmin()) {
+        event.preventDefault();
+        return;
+    }
+
+    const categoria =
+        Number(
+            val("product-category")
+        );
+
+    const loja =
+        Number(
+            val("product-store")
+        );
+
+    const fornecedor =
+        Number(
+            val("product-supplier")
+        );
+
+    const preco =
+        Number(
+            val("product-price")
+        );
+
+    const estoque =
+        Number(
+            val("product-stock")
+        );
+
+    if (
+        !categoria ||
+        !loja ||
+        !fornecedor
+    ) {
+
+        event.preventDefault();
+
+        toast(
+            "Preencha categoria, loja e fornecedor.",
+            true
+        );
+
+        return;
+    }
+
+    if (
+        preco < 0 ||
+        estoque < 0
+    ) {
+
+        event.preventDefault();
+
+        toast(
+            "Preço e estoque não podem ser negativos.",
+            true
+        );
+
+        return;
+    }
 
     save(
         event,
         "product-modal",
         "produtos",
         {
-            nome: val("product-name"),
-            categoria: Number(
-                val("product-category")
-            ),
-            loja: Number(
-                val("product-store")
-            ),
-            fornecedor: Number(
-                val("product-supplier")
-            ),
-            preco: Number(
-                val("product-price")
-            ),
-            estoque: Number(
-                val("product-stock")
-            ),
+            nome:
+                val("product-name"),
+
+            categoria,
+
+            loja,
+
+            fornecedor,
+
+            preco,
+
+            estoque,
+
             tendencia:
                 document.getElementById(
                     "product-trend"
                 )?.checked || false,
+
             novidade:
                 document.getElementById(
                     "product-new"
                 )?.checked || false
-        }
+        },
+        "produtos"
     );
-
 }
 
 
+// ============================================================
+// FORNECEDOR
+// ============================================================
+
 function saveSupplier(event) {
+
+    if (!exigirAdmin()) {
+        event.preventDefault();
+        return;
+    }
 
     save(
         event,
         "supplier-modal",
         "fornecedores",
         {
-            razao_social: val("supplier-name"),
-            cnpj: val("supplier-cnpj"),
-            email: val("supplier-email"),
-            telefone: val("supplier-phone")
-        }
-    );
+            razao_social:
+                val("supplier-name"),
 
+            cnpj:
+                val("supplier-cnpj"),
+
+            email:
+                val("supplier-email"),
+
+            telefone:
+                val("supplier-phone")
+        },
+        "fornecedores"
+    );
 }
 
 
+// ============================================================
+// CATEGORIA
+// ============================================================
+
 function saveCategory(event) {
+
+    if (!exigirAdmin()) {
+        event.preventDefault();
+        return;
+    }
 
     save(
         event,
         "category-modal",
         "categorias",
         {
-            nome: val("category-name"),
-            descricao: val("category-description")
-        }
-    );
+            nome:
+                val("category-name"),
 
+            descricao:
+                val("category-description")
+        },
+        "categorias"
+    );
 }
 
 
+// ============================================================
+// LOJA
+// ============================================================
+
 function saveStore(event) {
+
+    if (!exigirAdmin()) {
+        event.preventDefault();
+        return;
+    }
 
     save(
         event,
         "store-modal",
         "lojas",
         {
-            nome: val("store-name"),
-            tipo: val("store-type"),
-            endereco: val("store-address")
-        }
-    );
+            nome:
+                val("store-name"),
 
+            tipo:
+                val("store-type"),
+
+            endereco:
+                val("store-address")
+        },
+        "lojas"
+    );
 }
 
 
@@ -1359,17 +2231,120 @@ function saveStore(event) {
 
 function getClientName(id) {
 
-    return clients.find(
-        c => c.id === id
-    )?.nome || "Cliente não encontrado";
-
+    return (
+        clients.find(
+            c =>
+                Number(c.id) ===
+                Number(id)
+        )?.nome ||
+        "Cliente não encontrado"
+    );
 }
 
 
 function getStoreName(id) {
 
-    return stores.find(
-        s => s.id === id
-    )?.nome || "Loja não encontrada";
-
+    return (
+        stores.find(
+            s =>
+                Number(s.id) ===
+                Number(id)
+        )?.nome ||
+        "Loja não encontrada"
+    );
 }
+
+
+// ============================================================
+// DATA
+// ============================================================
+
+function formatDate(date) {
+
+    if (!date) {
+        return "-";
+    }
+
+    const d =
+        new Date(date);
+
+    if (
+        Number.isNaN(
+            d.getTime()
+        )
+    ) {
+        return "-";
+    }
+
+    return d.toLocaleString(
+        "pt-BR"
+    );
+}
+
+
+// ============================================================
+// PESQUISA
+// ============================================================
+
+document.addEventListener(
+    "input",
+    event => {
+
+        if (
+            event.target.id ===
+            "product-search"
+        ) {
+            renderProducts();
+        }
+
+        if (
+            event.target.id ===
+            "sales-search"
+        ) {
+            renderSales();
+        }
+
+    }
+);
+
+
+// ============================================================
+// ATUALIZAÇÃO AUTOMÁTICA
+// ============================================================
+
+window.addEventListener(
+    "focus",
+    () => {
+
+        if (
+            AUTH?.token &&
+            AUTH?.user
+        ) {
+            loadAll();
+        }
+
+    }
+);
+
+
+// ============================================================
+// FECHAR MODAL CLICANDO FORA
+// ============================================================
+
+document.addEventListener(
+    "click",
+    event => {
+
+        if (
+            event.target.classList.contains(
+                "modal"
+            )
+        ) {
+
+            event.target.classList.remove(
+                "show"
+            );
+        }
+
+    }
+);

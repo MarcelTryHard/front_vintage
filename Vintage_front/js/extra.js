@@ -32,42 +32,69 @@ Object.assign(titles, {
 });
 
 
-const fillRows = (
-    id,
-    list,
-    fn,
-    cols
-) => {
+// ============================================================
+// UTILITÁRIOS
+// ============================================================
 
-    const element =
-        document.getElementById(id);
+function fillRows(id, list, render, columns) {
+
+    const element = document.getElementById(id);
 
     if (!element) {
         return;
     }
 
-    element.innerHTML = list.length
-        ? list.map(fn).join("")
-        : `
+    if (!Array.isArray(list) || list.length === 0) {
+
+        element.innerHTML = `
             <tr>
-                <td colspan="${cols}" class="empty">
+                <td colspan="${columns}" class="empty">
                     Nenhum registro.
                 </td>
             </tr>
         `;
 
-};
+        return;
+    }
+
+    element.innerHTML = list.map(render).join("");
+}
 
 
-const statusBadge = status => `
-    <span class="badge ${
+function statusBadge(status) {
+
+    const classe =
         status === "CONCLUIDO"
             ? "green"
-            : "yellow"
-    }">
-        ${escapeHtml(status)}
-    </span>
-`;
+            : "yellow";
+
+    return `
+        <span class="badge ${classe}">
+            ${escapeHtml(status || "ABERTA")}
+        </span>
+    `;
+}
+
+
+function exigirPermissao(secao) {
+
+    if (
+        typeof podeAcessar === "function" &&
+        !podeAcessar(secao)
+    ) {
+
+        if (typeof toast === "function") {
+            toast(
+                "Você não possui permissão para acessar esta área.",
+                true
+            );
+        }
+
+        return false;
+    }
+
+    return true;
+}
 
 
 // ============================================================
@@ -75,6 +102,10 @@ const statusBadge = status => `
 // ============================================================
 
 async function loadPendencias() {
+
+    if (!exigirPermissao("pendencias")) {
+        return;
+    }
 
     try {
 
@@ -84,49 +115,60 @@ async function loadPendencias() {
         fillRows(
             "pending-table",
             list,
-            v => `
+            venda => `
                 <tr>
-                    <td>#${v.id}</td>
 
                     <td>
-                        ${escapeHtml(v.cliente)}
+                        #${venda.id}
                     </td>
 
                     <td>
-                        ${money(v.total)}
+                        ${escapeHtml(venda.cliente || "-")}
                     </td>
 
                     <td>
-                        ${money(v.pago)}
+                        ${money(venda.total)}
+                    </td>
+
+                    <td>
+                        ${money(venda.pago)}
                     </td>
 
                     <td>
                         <strong>
-                            ${money(v.restante)}
+                            ${money(venda.restante)}
                         </strong>
                     </td>
 
                     <td>
+
                         <button
                             class="btn success"
                             onclick="openPay(
-                                ${v.id},
-                                ${v.restante}
+                                ${venda.id},
+                                ${Number(venda.restante)}
                             )">
+
                             Receber
+
                         </button>
+
                     </td>
+
                 </tr>
             `,
             6
         );
 
-    } catch (e) {
+    } catch (error) {
 
-        toast(e.message, true);
+        toast(
+            "Erro ao carregar pendências: " +
+            error.message,
+            true
+        );
 
     }
-
 }
 
 
@@ -136,42 +178,53 @@ async function loadPendencias() {
 
 async function loadContas() {
 
+    if (!exigirPermissao("contas")) {
+        return;
+    }
+
     try {
 
-        const list =
+        const contas =
             await api("contas");
 
         fillRows(
             "accounts-table",
-            list,
-            c => `
+            contas,
+            conta => `
                 <tr>
-                    <td>${c.tipo}</td>
 
                     <td>
-                        ${escapeHtml(c.nome)}
+                        ${escapeHtml(conta.tipo || "-")}
                     </td>
 
                     <td>
-                        ${escapeHtml(c.numero)}
+                        ${escapeHtml(conta.nome || "-")}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(conta.numero || "-")}
                     </td>
 
                     <td>
                         <strong>
-                            ${money(c.saldo)}
+                            ${money(conta.saldo)}
                         </strong>
                     </td>
+
                 </tr>
             `,
             4
         );
 
-    } catch (e) {
+    } catch (error) {
 
-        toast(e.message, true);
+        toast(
+            "Erro ao carregar contas: " +
+            error.message,
+            true
+        );
 
     }
-
 }
 
 
@@ -181,10 +234,29 @@ async function loadContas() {
 
 async function loadExtrato() {
 
-    const id =
-        AUTH.user.perfil === "CLIENTE"
-            ? "me"
-            : val("extrato-client");
+    if (!exigirPermissao("extrato")) {
+        return;
+    }
+
+    const perfil =
+        AUTH.user?.perfil;
+
+    let id = null;
+
+    if (perfil === "CLIENTE") {
+
+        id = "me";
+
+    } else {
+
+        const select =
+            document.getElementById(
+                "extrato-client"
+            );
+
+        id = select?.value || null;
+
+    }
 
     if (!id) {
 
@@ -210,7 +282,7 @@ async function loadExtrato() {
 
     try {
 
-        const r =
+        const resultado =
             await api(
                 `clientes/${id}/extrato`
             );
@@ -221,48 +293,71 @@ async function loadExtrato() {
             );
 
         if (conta) {
-            conta.textContent =
-                `Conta ${r.conta.numero}`;
+
+            if (resultado.conta) {
+
+                conta.textContent =
+                    `Conta ${resultado.conta.numero} • Saldo ${money(resultado.conta.saldo)}`;
+
+            } else {
+
+                conta.textContent =
+                    "Conta não encontrada";
+
+            }
+
         }
 
         fillRows(
             "extrato-table",
-            r.vendas,
-            v => `
+            resultado.vendas || [],
+            venda => `
                 <tr>
-                    <td>#${v.id}</td>
 
                     <td>
-                        ${new Date(v.data)
-                            .toLocaleString("pt-BR")}
+                        #${venda.id}
                     </td>
 
                     <td>
-                        ${escapeHtml(v.loja)}
+                        ${new Date(
+                            venda.data
+                        ).toLocaleString("pt-BR")}
                     </td>
 
                     <td>
-                        ${money(v.total)}
+                        ${escapeHtml(
+                            venda.loja || "-"
+                        )}
                     </td>
 
                     <td>
-                        ${money(v.pago)}
+                        ${money(venda.total)}
                     </td>
 
                     <td>
-                        ${statusBadge(v.status)}
+                        ${money(venda.pago)}
                     </td>
+
+                    <td>
+                        ${statusBadge(
+                            venda.status
+                        )}
+                    </td>
+
                 </tr>
             `,
             6
         );
 
-    } catch (e) {
+    } catch (error) {
 
-        toast(e.message, true);
+        toast(
+            "Erro ao carregar extrato: " +
+            error.message,
+            true
+        );
 
     }
-
 }
 
 
@@ -272,60 +367,77 @@ async function loadExtrato() {
 
 async function loadRelatorios() {
 
+    if (!exigirPermissao("relatorios")) {
+        return;
+    }
+
     try {
 
-        const r =
+        const resultado =
             await api("relatorios");
 
-        const repCount =
+        const count =
             document.getElementById(
                 "rep-count"
             );
 
-        const repRevenue =
+        const revenue =
             document.getElementById(
                 "rep-revenue"
             );
 
-        const repReceived =
+        const received =
             document.getElementById(
                 "rep-received"
             );
 
-        const repTicket =
+        const ticket =
             document.getElementById(
                 "rep-ticket"
             );
 
-        if (repCount) {
-            repCount.textContent = r.vendas;
+        if (count) {
+            count.textContent =
+                resultado.vendas || 0;
         }
 
-        if (repRevenue) {
-            repRevenue.textContent =
-                money(r.faturamento);
+        if (revenue) {
+            revenue.textContent =
+                money(resultado.faturamento || 0);
         }
 
-        if (repReceived) {
-            repReceived.textContent =
-                money(r.recebido);
+        if (received) {
+            received.textContent =
+                money(resultado.recebido || 0);
         }
 
-        if (repTicket) {
-            repTicket.textContent =
-                money(r.ticket);
+        if (ticket) {
+            ticket.textContent =
+                money(resultado.ticket || 0);
         }
 
         fillRows(
             "rep-products",
-            r.topProdutos,
-            p => `
+            resultado.topProdutos || [],
+            produto => `
                 <tr>
+
                     <td>
-                        ${escapeHtml(p.nome)}
+                        ${escapeHtml(
+                            produto.nome || "-"
+                        )}
                     </td>
-                    <td>${p.qtd}</td>
-                    <td>${money(p.total)}</td>
+
+                    <td>
+                        ${produto.qtd || 0}
+                    </td>
+
+                    <td>
+                        ${money(
+                            produto.total || 0
+                        )}
+                    </td>
+
                 </tr>
             `,
             3
@@ -333,14 +445,26 @@ async function loadRelatorios() {
 
         fillRows(
             "rep-stores",
-            r.porLoja,
-            l => `
+            resultado.porLoja || [],
+            loja => `
                 <tr>
+
                     <td>
-                        ${escapeHtml(l.nome)}
+                        ${escapeHtml(
+                            loja.nome || "-"
+                        )}
                     </td>
-                    <td>${l.vendas}</td>
-                    <td>${money(l.total)}</td>
+
+                    <td>
+                        ${loja.vendas || 0}
+                    </td>
+
+                    <td>
+                        ${money(
+                            loja.total || 0
+                        )}
+                    </td>
+
                 </tr>
             `,
             3
@@ -348,73 +472,156 @@ async function loadRelatorios() {
 
         fillRows(
             "rep-methods",
-            r.porForma,
-            f => `
+            resultado.porForma || [],
+            forma => `
                 <tr>
+
                     <td>
-                        ${escapeHtml(f.forma)}
+                        ${escapeHtml(
+                            forma.forma || "-"
+                        )}
                     </td>
-                    <td>${money(f.total)}</td>
+
+                    <td>
+                        ${money(
+                            forma.total || 0
+                        )}
+                    </td>
+
                 </tr>
             `,
             2
         );
 
-    } catch (e) {
+    } catch (error) {
 
-        toast(e.message, true);
+        toast(
+            "Erro ao carregar relatórios: " +
+            error.message,
+            true
+        );
 
     }
-
 }
 
 
 // ============================================================
-// PAGAMENTO
+// PAGAMENTOS
 // ============================================================
 
 function openPay(id, restante) {
 
-    document.getElementById("pay-sale").value = id;
+    if (!exigirPermissao("pagamentos")) {
+        return;
+    }
 
-    document.getElementById(
-        "pay-value"
-    ).value = restante;
+    const sale =
+        document.getElementById(
+            "pay-sale"
+        );
 
-    document.getElementById(
-        "pay-value"
-    ).max = restante;
+    const value =
+        document.getElementById(
+            "pay-value"
+        );
 
-    document.getElementById(
-        "pay-title"
-    ).textContent =
-        `Receber pagamento - Venda #${id}`;
+    const title =
+        document.getElementById(
+            "pay-title"
+        );
+
+    if (sale) {
+        sale.value = id;
+    }
+
+    if (value) {
+
+        value.value =
+            Number(restante).toFixed(2);
+
+        value.max =
+            Number(restante).toFixed(2);
+
+        value.min = "0.01";
+
+    }
+
+    if (title) {
+
+        title.textContent =
+            `Receber pagamento - Venda #${id}`;
+
+    }
 
     openModal("pay-modal");
-
 }
 
 
-function savePay(event) {
+async function savePay(event) {
 
-    save(
-        event,
-        "pay-modal",
-        "pagamentos",
-        {
-            venda: Number(
-                val("pay-sale")
-            ),
+    event.preventDefault();
 
-            forma:
-                val("pay-method"),
+    if (!exigirPermissao("pagamentos")) {
+        return;
+    }
 
-            valor: Number(
-                val("pay-value")
-            )
+    const venda =
+        Number(
+            val("pay-sale")
+        );
+
+    const forma =
+        val("pay-method");
+
+    const valor =
+        Number(
+            val("pay-value")
+        );
+
+    if (!venda || !forma || valor <= 0) {
+
+        toast(
+            "Informe uma venda, forma e valor válidos.",
+            true
+        );
+
+        return;
+    }
+
+    try {
+
+        await api(
+            "pagamentos",
+            "POST",
+            {
+                venda,
+                forma,
+                valor
+            }
+        );
+
+        event.target.reset();
+
+        closeModal("pay-modal");
+
+        await loadPendencias();
+
+        if (typeof loadAll === "function") {
+            await loadAll();
         }
-    );
 
+        toast(
+            "Pagamento registrado com sucesso!"
+        );
+
+    } catch (error) {
+
+        toast(
+            error.message,
+            true
+        );
+
+    }
 }
 
 
@@ -422,27 +629,372 @@ function savePay(event) {
 // ESTOQUE
 // ============================================================
 
-function saveStock(event) {
+async function saveStock(event) {
 
-    save(
-        event,
-        "stock-modal",
-        "estoque",
-        {
-            produto: Number(
-                val("stock-product")
-            ),
+    event.preventDefault();
 
-            fornecedor: Number(
-                val("stock-supplier")
-            ),
+    if (!exigirPermissao("estoque")) {
+        return;
+    }
 
-            quantidade: Number(
-                val("stock-qty")
-            )
+    const produto =
+        Number(
+            val("stock-product")
+        );
+
+    const fornecedor =
+        Number(
+            val("stock-supplier")
+        );
+
+    const quantidade =
+        Number(
+            val("stock-qty")
+        );
+
+    if (
+        !produto ||
+        !fornecedor ||
+        quantidade <= 0
+    ) {
+
+        toast(
+            "Preencha todos os campos corretamente.",
+            true
+        );
+
+        return;
+    }
+
+    try {
+
+        await api(
+            "estoque",
+            "POST",
+            {
+                produto,
+                fornecedor,
+                quantidade
+            }
+        );
+
+        event.target.reset();
+
+        closeModal("stock-modal");
+
+        await loadAll();
+
+        toast(
+            "Entrada de estoque registrada!"
+        );
+
+    } catch (error) {
+
+        toast(
+            error.message,
+            true
+        );
+
+    }
+}
+
+
+// ============================================================
+// USUÁRIOS
+// ============================================================
+
+async function loadUsuarios() {
+
+    if (!exigirPermissao("usuarios")) {
+        return;
+    }
+
+    try {
+
+        const usuarios =
+            await api("usuarios");
+
+        fillRows(
+            "users-table",
+            usuarios,
+            usuario => `
+                <tr>
+
+                    <td>
+                        ${escapeHtml(
+                            usuario.login || "-"
+                        )}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(
+                            usuario.perfil || "-"
+                        )}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(
+                            usuario.cliente || "-"
+                        )}
+                    </td>
+
+                    <td>
+
+                        <span class="badge ${
+                            usuario.ativo
+                                ? "green"
+                                : "red"
+                        }">
+
+                            ${
+                                usuario.ativo
+                                    ? "Ativo"
+                                    : "Inativo"
+                            }
+
+                        </span>
+
+                    </td>
+
+                    <td>
+
+                        <button
+                            class="btn secondary"
+                            onclick="toggleUser(
+                                ${usuario.id},
+                                ${usuario.ativo ? 0 : 1}
+                            )">
+
+                            ${
+                                usuario.ativo
+                                    ? "Desativar"
+                                    : "Ativar"
+                            }
+
+                        </button>
+
+                    </td>
+
+                </tr>
+            `,
+            5
+        );
+
+    } catch (error) {
+
+        toast(
+            "Erro ao carregar usuários: " +
+            error.message,
+            true
+        );
+
+    }
+}
+
+
+async function toggleUser(id, ativo) {
+
+    if (!exigirPermissao("usuarios")) {
+        return;
+    }
+
+    try {
+
+        await api(
+            `usuarios/${id}/ativo`,
+            "PUT",
+            {
+                ativo: Number(ativo)
+            }
+        );
+
+        await loadUsuarios();
+
+        toast(
+            ativo
+                ? "Usuário ativado."
+                : "Usuário desativado."
+        );
+
+    } catch (error) {
+
+        toast(
+            error.message,
+            true
+        );
+
+    }
+}
+
+
+function toggleUserClient() {
+
+    if (!exigirPermissao("usuarios")) {
+        return;
+    }
+
+    const perfil =
+        val("user-profile");
+
+    const wrapper =
+        document.getElementById(
+            "user-client-wrap"
+        );
+
+    if (!wrapper) {
+        return;
+    }
+
+    const isClient =
+        perfil === "CLIENTE";
+
+    wrapper.style.display =
+        isClient
+            ? "flex"
+            : "none";
+
+    if (isClient) {
+
+        populateSelect(
+            "user-client",
+            clients,
+            "Selecione o cliente",
+            cliente => cliente.nome
+        );
+
+    } else {
+
+        const select =
+            document.getElementById(
+                "user-client"
+            );
+
+        if (select) {
+            select.value = "";
         }
-    );
 
+    }
+}
+
+
+async function saveUser(event) {
+
+    event.preventDefault();
+
+    if (!exigirPermissao("usuarios")) {
+        return;
+    }
+
+    const login =
+        val("user-login");
+
+    const senha =
+        val("user-pass");
+
+    const perfil =
+        val("user-profile");
+
+    const id_cliente =
+        Number(
+            val("user-client")
+        ) || null;
+
+    const perfisPermitidos = [
+        "ADMIN",
+        "OPERADOR",
+        "CLIENTE"
+    ];
+
+    if (
+        !login ||
+        !senha ||
+        !perfil
+    ) {
+
+        toast(
+            "Preencha todos os campos obrigatórios.",
+            true
+        );
+
+        return;
+    }
+
+    if (!perfisPermitidos.includes(perfil)) {
+
+        toast(
+            "Perfil de usuário inválido.",
+            true
+        );
+
+        return;
+    }
+
+    if (senha.length < 6) {
+
+        toast(
+            "A senha deve ter pelo menos 6 caracteres.",
+            true
+        );
+
+        return;
+    }
+
+    if (
+        perfil === "CLIENTE" &&
+        !id_cliente
+    ) {
+
+        toast(
+            "Selecione o cliente que será vinculado.",
+            true
+        );
+
+        return;
+    }
+
+    try {
+
+        await api(
+            "usuarios",
+            "POST",
+            {
+                login,
+                senha,
+                perfil,
+                id_cliente:
+                    perfil === "CLIENTE"
+                        ? id_cliente
+                        : null
+            }
+        );
+
+        event.target.reset();
+
+        const wrapper =
+            document.getElementById(
+                "user-client-wrap"
+            );
+
+        if (wrapper) {
+            wrapper.style.display = "none";
+        }
+
+        closeModal("user-modal");
+
+        await loadUsuarios();
+
+        toast(
+            "Usuário criado com sucesso!"
+        );
+
+    } catch (error) {
+
+        toast(
+            error.message,
+            true
+        );
+
+    }
 }
 
 
@@ -450,39 +1002,54 @@ function saveStock(event) {
 // CARREGADORES
 // ============================================================
 
-const loaders = {
+const extraLoaders = {
 
     pendencias: loadPendencias,
+
     contas: loadContas,
+
     extrato: loadExtrato,
+
     relatorios: loadRelatorios,
+
     usuarios: loadUsuarios
 
 };
 
 
-const _showSection = showSection;
+// ============================================================
+// ABRIR SEÇÕES EXTRAS
+// ============================================================
 
-showSection = function (section) {
+const originalShowSection = showSection;
 
-    _showSection(section);
+showSection = function(section) {
+
+    if (!exigirPermissao(section)) {
+        return;
+    }
+
+    originalShowSection(section);
 
     if (
         section === "extrato" &&
-        AUTH.user.perfil !== "CLIENTE"
+        AUTH.user?.perfil !== "CLIENTE"
     ) {
 
         populateSelect(
             "extrato-client",
             clients,
             "Selecione o cliente",
-            c => c.nome
+            cliente => cliente.nome
         );
 
     }
 
-    if (loaders[section]) {
-        loaders[section]();
+    const loader =
+        extraLoaders[section];
+
+    if (loader) {
+        loader();
     }
 
 };
@@ -492,208 +1059,87 @@ showSection = function (section) {
 // MODAL DE ESTOQUE
 // ============================================================
 
-const _openModal = openModal;
+const originalOpenModal = openModal;
 
-openModal = function (id) {
+openModal = function(id) {
 
-    _openModal(id);
-
-    if (id === "stock-modal") {
-
-        populateSelect(
-            "stock-product",
-            products,
-            "Selecione o produto",
-            p => p.nome
-        );
-
-        populateSelect(
-            "stock-supplier",
-            suppliers,
-            "Selecione um fornecedor",
-            s => s.razao_social
-        );
-
+    if (
+        id === "stock-modal" &&
+        !exigirPermissao("estoque")
+    ) {
+        return;
     }
 
-};
-
-
-// ============================================================
-// CARREGAMENTO EXTRA
-// ============================================================
-
-const _loadAll = loadAll;
-
-loadAll = async function () {
-
-    await _loadAll();
-
-    const active =
-        document.querySelector(
-            ".section.active"
-        )?.id;
-
-    if (active !== "extrato" && loaders[active]) {
-        loaders[active]();
+    if (
+        id === "pay-modal" &&
+        !exigirPermissao("pagamentos")
+    ) {
+        return;
     }
 
-};
-
-
-// ============================================================
-// USUÁRIOS
-// ============================================================
-
-async function loadUsuarios() {
-
-    try {
-
-        const users =
-            await api("usuarios");
-
-        fillRows(
-            "users-table",
-            users,
-            u => `
-                <tr>
-
-                    <td>
-                        ${escapeHtml(u.login)}
-                    </td>
-
-                    <td>
-                        ${u.perfil}
-                    </td>
-
-                    <td>
-                        ${escapeHtml(
-                            u.cliente || "-"
-                        )}
-                    </td>
-
-                    <td>
-                        <span class="badge ${
-                            u.ativo
-                                ? "green"
-                                : "red"
-                        }">
-                            ${
-                                u.ativo
-                                    ? "Ativo"
-                                    : "Inativo"
-                            }
-                        </span>
-                    </td>
-
-                    <td>
-                        <button
-                            class="btn secondary"
-                            onclick="toggleUser(
-                                ${u.id},
-                                ${u.ativo ? 0 : 1}
-                            )">
-
-                            ${
-                                u.ativo
-                                    ? "Desativar"
-                                    : "Ativar"
-                            }
-
-                        </button>
-                    </td>
-
-                </tr>
-            `,
-            5
-        );
-
-    } catch (e) {
-
-        toast(e.message, true);
-
+    if (
+        id === "user-modal" &&
+        !exigirPermissao("usuarios")
+    ) {
+        return;
     }
 
-}
+    originalOpenModal(id);
 
-
-async function toggleUser(id, ativo) {
-
-    try {
-
-        await api(
-            `usuarios/${id}/ativo`,
-            "PUT",
-            { ativo }
-        );
-
-        await loadUsuarios();
-
-    } catch (e) {
-
-        toast(e.message, true);
-
+    if (id !== "stock-modal") {
+        return;
     }
 
-}
-
-
-function toggleUserClient() {
-
-    const isClient =
-        val("user-profile") === "CLIENTE";
-
-    const wrap =
-        document.getElementById(
-            "user-client-wrap"
-        );
-
-    if (wrap) {
-        wrap.style.display =
-            isClient ? "flex" : "none";
-    }
-
-    if (isClient) {
-
-        populateSelect(
-            "user-client",
-            clients,
-            "Selecione o cliente",
-            c => c.nome
-        );
-
-    }
-
-}
-
-
-function saveUser(event) {
-
-    save(
-        event,
-        "user-modal",
-        "usuarios",
-        {
-            login: val("user-login"),
-            senha: val("user-pass"),
-            perfil: val("user-profile"),
-            id_cliente:
-                Number(
-                    val("user-client")
-                ) || null
-        }
+    populateSelect(
+        "stock-product",
+        products,
+        "Selecione o produto",
+        produto => produto.nome
     );
 
-}
+    populateSelect(
+        "stock-supplier",
+        suppliers,
+        "Selecione um fornecedor",
+        fornecedor =>
+            fornecedor.razao_social
+    );
+
+};
 
 
 // ============================================================
-// PERFIL CLIENTE
+// CARREGAMENTO DE USUÁRIOS
 // ============================================================
 
-if (AUTH.user.perfil === "CLIENTE") {
+document.addEventListener(
+    "DOMContentLoaded",
+    () => {
 
-    loadAll = async function () {
+        if (
+            AUTH.user?.perfil === "ADMIN"
+        ) {
+
+            loadUsuarios();
+
+        }
+
+    }
+);
+
+
+// ============================================================
+// CLIENTE
+// ============================================================
+
+if (
+    AUTH.user?.perfil === "CLIENTE"
+) {
+
+    const originalLoadAll =
+        loadAll;
+
+    loadAll = async function() {
 
         try {
 
@@ -702,11 +1148,13 @@ if (AUTH.user.perfil === "CLIENTE") {
 
             renderProducts();
 
-        } catch (e) {
+            updateDashboard();
+
+        } catch (error) {
 
             toast(
                 "Falha ao carregar produtos: " +
-                e.message,
+                error.message,
                 true
             );
 
@@ -718,7 +1166,11 @@ if (AUTH.user.perfil === "CLIENTE") {
         "DOMContentLoaded",
         () => {
 
-            showSection("produtos");
+            setTimeout(() => {
+
+                showSection("produtos");
+
+            }, 0);
 
         }
     );
